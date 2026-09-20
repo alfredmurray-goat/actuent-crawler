@@ -10,7 +10,7 @@ import * as path from "path"
 const groq = new Groq({ apiKey: GROQ_API_KEY })
 
 // Read domains directly from the Tranco CSV file
-const csvContent = fs.readFileSync(path.join(process.cwd(), "tranco-PY96j.csv"), "utf8");
+const csvContent = fs.readFileSync(path.join(process.cwd(), "tranco-PY96J.csv"), "utf8");
 const SITES_TO_CRAWL = csvContent
   .split(/\r?\n/)
   .map(line => line.trim())
