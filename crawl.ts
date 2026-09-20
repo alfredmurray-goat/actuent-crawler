@@ -4,24 +4,24 @@ const FIRECRAWL_API_KEY = process.env.FIRECRAWL_API_KEY!
 const GROQ_API_KEY = process.env.GROQ_API_KEY!
 
 import Groq from "groq-sdk"
+import * as fs from "fs"
+import * as path from "path"
+
 const groq = new Groq({ apiKey: GROQ_API_KEY })
 
-const SITES_TO_CRAWL = [
-  "nike.com", "adidas.com", "asics.com", "newbalance.com", "puma.com",
-  "zara.com", "hm.com", "asos.com", "uniqlo.com", "gap.com",
-  "apple.com", "samsung.com", "sony.com", "lg.com", "dell.com",
-  "spotify.com", "netflix.com", "youtube.com", "twitch.tv", "soundcloud.com",
-  "airbnb.com", "booking.com", "tripadvisor.com", "expedia.com", "hotels.com",
-  "uber.com", "lyft.com", "bolt.eu", "deliveroo.com", "doordash.com",
-  "amazon.com", "ebay.com", "etsy.com", "shopify.com", "aliexpress.com",
-  "linkedin.com", "twitter.com", "instagram.com", "facebook.com", "reddit.com",
-  "notion.so", "figma.com", "linear.app", "vercel.com", "netlify.com",
-  "stripe.com", "paypal.com", "revolut.com", "monzo.com", "wise.com",
-  "openai.com", "anthropic.com", "mistral.ai", "huggingface.co", "groq.com",
-  "github.com", "gitlab.com", "stackoverflow.com", "npmjs.com",
-  "bbc.co.uk", "theguardian.com", "nytimes.com", "techcrunch.com", "wired.com",
-  "wikipedia.org", "medium.com", "substack.com", "producthunt.com", "ycombinator.com"
-]
+// Read domains directly from the Tranco CSV file
+const csvContent = fs.readFileSync(path.join(process.cwd(), "tranco-PY96j.csv"), "utf8");
+const SITES_TO_CRAWL = csvContent
+  .split(/\r?\n/)
+  .map(line => line.trim())
+  .filter(line => line.length > 0)
+  .map(line => {
+    // Tranco CSVs look like "rank,domain" or just a clean list. This extracts the domain safely.
+    const parts = line.split(",");
+    const domain = parts[parts.length - 1]; 
+    return domain.replace(/^["']|["']\$/g, "").trim(); // Remove optional quotes
+  })
+  .filter(domain => domain && !domain.toLowerCase().includes("domain")); // Exclude header row if present
 
 async function alreadyCrawled(domain: string): Promise<boolean> {
   try {
@@ -43,7 +43,7 @@ async function alreadyCrawled(domain: string): Promise<boolean> {
 
 async function scrapeWithFirecrawl(domain: string): Promise<string | null> {
   try {
-    const res = await fetch("https://api.firecrawl.dev/v1/scrape", {
+    const res = await fetch("https://firecrawl.dev", {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${FIRECRAWL_API_KEY}`,
