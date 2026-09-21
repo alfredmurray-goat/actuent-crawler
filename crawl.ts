@@ -175,7 +175,7 @@ async function runInBatches(domains: string[], concurrency: number): Promise<voi
 }
 
 async function main() {
-  const csvPath = "./tranco-PY96J.csv"
+  const csvPath = "./tranco_PY96J.csv"
 
   if (!fs.existsSync(csvPath)) {
     console.error(`❌ CSV not found at ${csvPath}`)
