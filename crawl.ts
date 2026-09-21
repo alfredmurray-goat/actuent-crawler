@@ -20,7 +20,26 @@ const SITES_TO_CRAWL = [
   "openai.com", "anthropic.com", "mistral.ai", "huggingface.co", "groq.com",
   "github.com", "gitlab.com", "stackoverflow.com", "npmjs.com",
   "bbc.co.uk", "theguardian.com", "nytimes.com", "techcrunch.com", "wired.com",
-  "wikipedia.org", "medium.com", "substack.com", "producthunt.com", "ycombinator.com"
+  "wikipedia.org", "medium.com", "substack.com", "producthunt.com", "ycombinator.com",
+  "ikea.com", "target.com", "walmart.com", "bestbuy.com", "wayfair.com",
+  "canva.com", "dropbox.com", "slack.com", "zoom.us", "notion.so",
+  "duolingo.com", "coursera.org", "udemy.com", "khan academy.org", "skillshare.com",
+  "nba.com", "bbc.co.uk/sport", "skysports.com", "espn.com", "premierleague.com",
+  "ryanair.com", "easyjet.com", "britishairways.com", "klm.com", "sas.dk",
+  "mcdonalds.com", "starbucks.com", "dominos.com", "papajohns.com", "subway.com",
+  "tesla.com", "bmw.com", "mercedes-benz.com", "audi.com", "volkswagen.com",
+  "rightmove.co.uk", "zillow.com", "realtor.com", "zoopla.co.uk", "hemnet.se",
+  "healthline.com", "webmd.com", "nhs.uk", "mayoclinic.org",
+  "coinbase.com", "binance.com", "kraken.com", "crypto.com",
+  "wordpress.com", "wix.com", "squarespace.com", "webflow.com",
+  "twilio.com", "sendgrid.com", "mailchimp.com", "hubspot.com", "salesforce.com",
+  "discord.com", "telegram.org", "whatsapp.com", "signal.org",
+  "tiktok.com", "pinterest.com", "snapchat.com", "tumblr.com",
+  "adobe.com", "sketch.com", "invisionapp.com", "miro.com", "loom.com",
+  "atlassian.com", "jira.atlassian.com", "confluence.atlassian.com",
+  "digitalocean.com", "aws.amazon.com", "cloud.google.com", "azure.microsoft.com",
+  "mongodb.com", "supabase.com", "planetscale.com", "neon.tech",
+  "resend.com", "postmarkapp.com", "cloudflare.com", "fastly.com"
 ]
 
 async function alreadyCrawled(domain: string): Promise<boolean> {
