@@ -158,8 +158,12 @@ async function runInBatches(domains: string[], concurrency: number): Promise<voi
 }
 
 async function main() {
+<<<<<<< HEAD
   const csvPath = "./tranco_PY69J.csv"
   if (!fs.existsSync(csvPath)) { console.error(`❌ CSV not found at ${csvPath}`); process.exit(1) }
+=======
+  const csvPath = "./tranco_PY96J.csv"
+>>>>>>> refs/remotes/origin/main
 
   console.log("📖 Loading Tranco CSV...")
   const allDomains = await loadDomainsFromCSV(csvPath)
