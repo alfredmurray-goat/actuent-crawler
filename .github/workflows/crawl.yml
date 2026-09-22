@@ -1,9 +1,13 @@
 name: Actuent Mass Crawler
 on:
   schedule:
-    - cron: '0 */8 * * *'
+    - cron: '0 */6 * * *'
   workflow_dispatch:
-
+    inputs:
+      limit:
+        description: 'Number of sites to crawl (default 500 per run)'
+        default: '500'
+        required: false
 jobs:
   crawl:
     runs-on: ubuntu-latest
@@ -13,9 +17,17 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: npm install
-      - run: npx tsx crawl.ts
+      - name: Download Tranco list
+        run: |
+          curl -L "https://tranco-list.eu/top-1m.csv.zip" -o tranco.zip
+          unzip tranco.zip
+          mv top-1m.csv tranco_PY69J.csv
+      - name: Install dependencies
+        run: npm install
+      - name: Run crawler
+        run: npx tsx crawl.ts
         env:
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           FIRECRAWL_API_KEY: ${{ secrets.FIRECRAWL_API_KEY }}
+          CRAWL_LIMIT: ${{ inputs.limit || '500' }}
