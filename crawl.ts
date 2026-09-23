@@ -124,7 +124,14 @@ async function crawlSite(domain: string, index: number, total: number): Promise<
     const content = await scrapeWithJina(domain)
     if (!content) { console.log(`[${index}/${total}] blocked ${domain}`); return }
     const lawp = await convertToLAWP(domain, content)
-    if (!lawp) { console.log(`[${index}/${total}] bad lawp ${domain}`); return }
+       if (!lawp) {
+      lawp = {
+        domain,
+        name: domain.split(".")[0].charAt(0).toUpperCase() + domain.split(".")[0].slice(1),
+        pages: { "/": { title: domain, content: content.slice(0, 200) } },
+        actions: []
+      }
+    }
     await saveSite(lawp)
     console.log(`[${index}/${total}] SAVED ${domain}`)
     await new Promise(r => setTimeout(r, 500))
