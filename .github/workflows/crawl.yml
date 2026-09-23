@@ -5,8 +5,8 @@ on:
   workflow_dispatch:
     inputs:
       limit:
-        description: 'Number of sites to crawl (default 500 per run)'
-        default: '500'
+        description: 'Number of sites to crawl (default 1000 per run)'
+        default: '1000'
         required: false
 jobs:
   crawl:
