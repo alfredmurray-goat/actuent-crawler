@@ -8,17 +8,27 @@ const GROQ_API_KEY = process.env.GROQ_API_KEY!
 const CONCURRENCY = 5
 const CRAWL_LIMIT = parseInt(process.env.CRAWL_LIMIT || "500")
 
-const SKIP_DOMAINS = new Set([
-  "google.com","youtube.com","facebook.com","twitter.com","instagram.com",
-  "linkedin.com","reddit.com","tiktok.com","snapchat.com","whatsapp.com",
-  "pinterest.com","tumblr.com","t.co","bit.ly","goo.gl","x.com"
-])
+const SKIP_DOMAINS = new Set(["google.com","youtube.com","facebook.com","twitter.com","instagram.com","linkedin.com","reddit.com","tiktok.com","snapchat.com","whatsapp.com","pinterest.com","tumblr.com","t.co","bit.ly","goo.gl","x.com"])
 const SKIP_TLDS = [".tk",".ml",".ga",".cf",".gq",".xxx",".adult"]
 
 if (!SUPABASE_SERVICE_KEY) { console.error("Missing SUPABASE_SERVICE_KEY"); process.exit(1) }
 if (!GROQ_API_KEY) { console.error("Missing GROQ_API_KEY"); process.exit(1) }
 
 const groq = new Groq({ apiKey: GROQ_API_KEY })
+
+async function loadDomainsFromCSV(path: string): Promise<string[]> {
+  const domains: string[] = []
+  const rl = readline.createInterface({ input: fs.createReadStream(path), crlfDelay: Infinity })
+  for await (const line of rl) {
+    const parts = line.split(",")
+    const domain = parts[1]?.trim().toLowerCase()
+    if (!domain || !domain.includes(".") || domain.startsWith("#")) continue
+    if (SKIP_DOMAINS.has(domain)) continue
+    if (SKIP_TLDS.some(tld => domain.endsWith(tld))) continue
+    domains.push(domain)
+  }
+  return domains
+}
 
 async function getOffset(): Promise<number> {
   try {
@@ -45,20 +55,6 @@ async function saveOffset(offset: number): Promise<void> {
   } catch {}
 }
 
-async function loadDomainsFromCSV(path: string): Promise<string[]> {
-  const domains: string[] = []
-  const rl = readline.createInterface({ input: fs.createReadStream(path), crlfDelay: Infinity })
-  for await (const line of rl) {
-    const parts = line.split(",")
-    const domain = parts[1]?.trim().toLowerCase()
-    if (!domain || !domain.includes(".") || domain.startsWith("#")) continue
-    if (SKIP_DOMAINS.has(domain)) continue
-    if (SKIP_TLDS.some(tld => domain.endsWith(tld))) continue
-    domains.push(domain)
-  }
-  return domains
-}
-
 async function alreadyCrawled(domain: string): Promise<boolean> {
   try {
     const res = await fetch(
@@ -74,13 +70,31 @@ async function alreadyCrawled(domain: string): Promise<boolean> {
 async function scrapeWithJina(domain: string): Promise<string | null> {
   try {
     const res = await fetch(`https://r.jina.ai/https://${domain}`, {
-      headers: { "Accept": "text/plain", "X-No-Cache": "true" },
-      signal: AbortSignal.timeout(15000)
+      headers: { "Accept": "text/plain" },
+      signal: AbortSignal.timeout(12000)
     })
     if (!res.ok) return null
     const text = await res.text()
-    if (!text || text.length < 100) return null
+    if (!text || text.length < 50) return null
     return text.slice(0, 3000)
+  } catch { return null }
+}
+
+async function scrapeBasic(domain: string): Promise<string | null> {
+  try {
+    const res = await fetch(`https://${domain}`, {
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; Actuent/1.0; +https://actuent.ai)" },
+      signal: AbortSignal.timeout(8000)
+    })
+    if (!res.ok) return null
+    const html = await res.text()
+    return html
+      .replace(/<script[\s\S]*?<\/script>/gi, "")
+      .replace(/<style[\s\S]*?<\/style>/gi, "")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 3000)
   } catch { return null }
 }
 
@@ -98,43 +112,57 @@ async function saveSite(site: any): Promise<void> {
   if (!res.ok) throw new Error(`Save failed: ${await res.text()}`)
 }
 
-async function convertToLAWP(domain: string, content: string): Promise<any | null> {
+function minimalLAWP(domain: string, content: string = ""): any {
+  const name = domain.split(".")[0]
+  return {
+    domain,
+    name: name.charAt(0).toUpperCase() + name.slice(1),
+    pages: { "/": { title: domain, content: content.slice(0, 200) || `Website at ${domain}` } },
+    actions: []
+  }
+}
+
+async function convertToLAWP(domain: string, content: string): Promise<any> {
   try {
     const completion = await groq.chat.completions.create({
       model: "openai/gpt-oss-20b",
       messages: [{
         role: "user",
-        content: `Convert this website content into LAWP format.\n\nDomain: ${domain}\nContent: ${content}\n\nReturn ONLY valid JSON:\n{"domain":"${domain}","name":"Site name","pages":{"/":{"title":"Title","content":"Summary under 100 words"}},"actions":[{"id":"id","name":"Name","description":"What","intent":["k1","k2","k3"],"input":{"type":"text","required":false}}]}\n\nInclude 2-4 real actions only.`
+        content: `Convert to LAWP JSON.\n\nDomain: ${domain}\nContent: ${content}\n\nReturn ONLY valid JSON:\n{"domain":"${domain}","name":"Name","pages":{"/":{"title":"T","content":"Summary under 100 words"}},"actions":[{"id":"id","name":"N","description":"D","intent":["k1","k2","k3"],"input":{"type":"text","required":false}}]}\n\nInclude 2-4 real actions.`
       }],
       temperature: 0.1
     })
     const raw = completion.choices?.[0]?.message?.content
-    if (!raw) return null
+    if (!raw) return minimalLAWP(domain, content)
     try { return JSON.parse(raw) } catch {
       const match = raw.match(/\{[\s\S]*\}/)
-      return match ? JSON.parse(match[0]) : null
+      if (!match) return minimalLAWP(domain, content)
+      try { return JSON.parse(match[0]) } catch { return minimalLAWP(domain, content) }
     }
-  } catch { return null }
+  } catch {
+    return minimalLAWP(domain, content)
+  }
 }
 
 async function crawlSite(domain: string, index: number, total: number): Promise<void> {
   try {
     const exists = await alreadyCrawled(domain)
     if (exists) { console.log(`[${index}/${total}] skip ${domain}`); return }
-    const content = await scrapeWithJina(domain)
-    if (!content) { console.log(`[${index}/${total}] blocked ${domain}`); return }
-    const lawp = await convertToLAWP(domain, content)
-       if (!lawp) {
-      lawp = {
-        domain,
-        name: domain.split(".")[0].charAt(0).toUpperCase() + domain.split(".")[0].slice(1),
-        pages: { "/": { title: domain, content: content.slice(0, 200) } },
-        actions: []
-      }
+
+    let content = await scrapeWithJina(domain)
+    if (!content) content = await scrapeBasic(domain)
+
+    let lawp: any
+    if (!content) {
+      console.log(`[${index}/${total}] blocked — saving minimal ${domain}`)
+      lawp = minimalLAWP(domain)
+    } else {
+      lawp = await convertToLAWP(domain, content)
     }
+
     await saveSite(lawp)
     console.log(`[${index}/${total}] SAVED ${domain}`)
-    await new Promise(r => setTimeout(r, 500))
+    await new Promise(r => setTimeout(r, 300))
   } catch(e) {
     console.log(`[${index}/${total}] error ${domain}: ${e}`)
   }
@@ -155,30 +183,23 @@ async function runInBatches(domains: string[], concurrency: number): Promise<voi
 async function main() {
   const csvPath = "./tranco_PY69J.csv"
   if (!fs.existsSync(csvPath)) { console.error(`CSV not found: ${csvPath}`); process.exit(1) }
-
   console.log("Loading CSV...")
   const allDomains = await loadDomainsFromCSV(csvPath)
-  console.log(`Total domains in CSV: ${allDomains.length}`)
-
+  console.log(`Total: ${allDomains.length}`)
   const currentOffset = await getOffset()
-  console.log(`Current offset: ${currentOffset}`)
-
+  console.log(`Offset: ${currentOffset}`)
   const domains = allDomains.slice(currentOffset, currentOffset + CRAWL_LIMIT)
-
   if (domains.length === 0) {
-    console.log("Reached end of CSV — resetting offset to 0")
+    console.log("End of CSV — resetting to 0")
     await saveOffset(0)
     return
   }
-
   const nextOffset = currentOffset + CRAWL_LIMIT
-  console.log(`Crawling positions ${currentOffset}–${nextOffset} with ${CONCURRENCY} workers`)
-
+  console.log(`Crawling positions ${currentOffset}–${nextOffset}`)
   const start = Date.now()
   await runInBatches(domains, CONCURRENCY)
-
   await saveOffset(nextOffset >= allDomains.length ? 0 : nextOffset)
-  console.log(`Done in ${Math.round((Date.now() - start) / 60000)} minutes. Next offset: ${nextOffset}`)
+  console.log(`Done in ${Math.round((Date.now() - start) / 60000)} min. Next offset: ${nextOffset}`)
 }
 
 main()
