@@ -5,7 +5,8 @@ import { SUPABASE_URL, SUPABASE_HEADERS, fetchNative, scrapeJina, scrapeBasic, t
 // get their updated_at bumped so the next run moves on to others.
 
 const LIMIT = parseInt(process.env.RECONVERT_LIMIT || "150")
-const CONCURRENCY = 3
+// One at a time: the crawler models' free-tier per-minute limits allow roughly one conversion a minute.
+const CONCURRENCY = parseInt(process.env.RECONVERT_CONCURRENCY || "1")
 const MAX_CONSECUTIVE_LLM_FAILURES = 10
 
 if (!process.env.SUPABASE_SERVICE_KEY) { console.error("Missing SUPABASE_SERVICE_KEY"); process.exit(1) }

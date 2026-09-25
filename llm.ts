@@ -71,13 +71,14 @@ export async function complete(prompt: string, timeoutMs: number = 15000): Promi
           ...(model.startsWith("qwen/") ? { reasoning_effort: "none" } : {})
         } as any, { timeout: timeoutMs, maxRetries: 0 }) as any
         const text = completion.choices?.[0]?.message?.content
+        if (!text) console.log(`llm: ${model} returned no content (finish_reason: ${completion.choices?.[0]?.finish_reason})`)
         if (text) return text.replace(/<think>[\s\S]*?<\/think>/g, "").trim()
       } catch (e: any) {
         const status = e?.status
         const message = String(e?.message || e)
         if (status === 429) blockedUntil.set(model, Date.now() + retryAfterMs(message))
         else if (status === 400 || status === 403 || status === 404) blockedUntil.set(model, Date.now() + 60 * 60000)
-        console.log(`llm: ${model} failed (${status ?? "no status"}): ${message.slice(0, 160)}`)
+        console.log(`llm: ${model} failed (${status ?? "no status"}): ${message.replace(/.*on_demand` on /, "").slice(0, 200)}`)
       }
     }
     const nextFree = Math.min(...models.map(m => blockedUntil.get(m) || 0))
