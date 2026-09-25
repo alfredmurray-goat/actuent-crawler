@@ -19,6 +19,19 @@ export function contentHash(content: string): string {
   return crypto.createHash("sha256").update(content).digest("hex").slice(0, 32)
 }
 
+// Turns scraped text (Jina Reader markdown or stripped HTML) into a plain readable snippet:
+// drops Jina's "Title:/URL Source:/Markdown Content:" header lines, images, link targets and markdown.
+export function cleanScraped(text: string): string {
+  return String(text || "")
+    .replace(/^(Title|URL Source|Published Time|Warning|Markdown Content):.*$/gm, " ")
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, " ")
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/https?:\/\/\S+/g, " ")
+    .replace(/[#*_>`|]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+}
+
 // A site's own LAWP from https://<domain>/.well-known/lawp.json always wins over crawling.
 export async function fetchNative(domain: string): Promise<any | null> {
   try {
@@ -65,7 +78,7 @@ export function minimal(domain: string, content: string = ""): any {
   return {
     domain,
     name: name.charAt(0).toUpperCase() + name.slice(1),
-    pages: { "/": { title: domain, content: content.slice(0, 200) || `Website at ${domain}` } },
+    pages: { "/": { title: domain, content: cleanScraped(content).slice(0, 200) || `Website at ${domain}` } },
     actions: []
   }
 }

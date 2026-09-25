@@ -1,6 +1,7 @@
 import Groq from "groq-sdk"
 
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY })
+// Placeholder key when unset: groqModels() skips Groq entirely without GROQ_API_KEY.
+const groq = new Groq({ apiKey: process.env.GROQ_API_KEY || "unset" })
 
 // Free LLM quota is the crawler's bottleneck, so it spreads work over every free model it can:
 //   1. Groq: every chat model the key lists, except the ones reserved for live search
