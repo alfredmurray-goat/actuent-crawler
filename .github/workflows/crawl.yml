@@ -5,13 +5,21 @@ on:
   workflow_dispatch:
     inputs:
       limit:
-        description: 'Number of sites to crawl (default 1000 per run)'
-        default: '1000'
+        description: 'Max NEW sites to crawl this run (already-indexed sites are skipped for free)'
+        default: '100000'
         required: false
+      minutes:
+        description: 'Time budget in minutes before the run stops and saves its position'
+        default: '320'
+        required: false
+# Never run two crawls at once — they would read the same offset and duplicate work.
+concurrency:
+  group: mass-crawler
+  cancel-in-progress: false
 jobs:
   crawl:
     runs-on: ubuntu-latest
-    timeout-minutes: 300
+    timeout-minutes: 350
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -29,5 +37,5 @@ jobs:
         env:
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-          FIRECRAWL_API_KEY: ${{ secrets.FIRECRAWL_API_KEY }}
-          CRAWL_LIMIT: ${{ inputs.limit || '500' }}
+          CRAWL_LIMIT: ${{ inputs.limit || '100000' }}
+          TIME_BUDGET_MIN: ${{ inputs.minutes || '320' }}

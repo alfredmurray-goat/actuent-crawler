@@ -1,0 +1,19 @@
+name: Recrawl Popular Sites
+on:
+  schedule:
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+jobs:
+  recrawl:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install
+      - run: npx tsx recrawl_popular.ts
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}

@@ -5,8 +5,13 @@ import readline from "readline"
 const SUPABASE_URL = "https://bcmwypjrahtxogytsvuc.supabase.co"
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY!
 const GROQ_API_KEY = process.env.GROQ_API_KEY!
-const CONCURRENCY = 5
-const CRAWL_LIMIT = parseInt(process.env.CRAWL_LIMIT || "500")
+const CONCURRENCY = parseInt(process.env.CONCURRENCY || "5")
+// Max NEW sites per run. Already-indexed domains don't count towards this.
+const CRAWL_LIMIT = parseInt(process.env.CRAWL_LIMIT || "100000")
+// Stop starting new sites after this many minutes so the run finishes before GitHub's job timeout.
+const TIME_BUDGET_MS = parseInt(process.env.TIME_BUDGET_MIN || "320") * 60000
+// Domains checked against Supabase per request. The offset is checkpointed after each chunk.
+const CHUNK_SIZE = 100
 
 const SKIP = new Set(["google.com","youtube.com","facebook.com","twitter.com","instagram.com","linkedin.com","reddit.com","tiktok.com","snapchat.com","whatsapp.com","pinterest.com","t.co","bit.ly","x.com"])
 const SKIP_TLDS = [".tk",".ml",".ga",".cf",".gq",".xxx"]
@@ -42,23 +47,33 @@ async function getOffset(): Promise<number> {
 
 async function saveOffset(v: number): Promise<void> {
   try {
-    await fetch(`${SUPABASE_URL}/rest/v1/crawler_state?id=eq.offset`, {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/crawler_state?id=eq.offset`, {
       method: "PATCH",
       headers: { "apikey": SUPABASE_SERVICE_KEY, "Authorization": `Bearer ${SUPABASE_SERVICE_KEY}`, "Content-Type": "application/json" },
       body: JSON.stringify({ value: v })
     })
-  } catch {}
+    if (!r.ok) console.log(`offset save failed: ${r.status} ${await r.text()}`)
+  } catch (e) { console.log(`offset save failed: ${e}`) }
 }
 
-async function alreadyCrawled(domain: string): Promise<boolean> {
-  try {
-    const r = await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?domain=eq.${domain}&select=id`, {
-      headers: { "apikey": SUPABASE_SERVICE_KEY, "Authorization": `Bearer ${SUPABASE_SERVICE_KEY}` }
-    })
-    if (!r.ok) return false
-    const data = await r.json()
-    return Array.isArray(data) && data.length > 0
-  } catch { return false }
+async function filterUncrawled(domains: string[]): Promise<string[]> {
+  const list = domains.map(d => `"${d}"`).join(",")
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?select=domain&domain=in.(${encodeURIComponent(list)})`, {
+        headers: { "apikey": SUPABASE_SERVICE_KEY, "Authorization": `Bearer ${SUPABASE_SERVICE_KEY}` }
+      })
+      if (!r.ok) throw new Error(`${r.status} ${await r.text()}`)
+      const rows: { domain: string }[] = await r.json()
+      const existing = new Set(rows.map(row => row.domain))
+      return domains.filter(d => !existing.has(d))
+    } catch (e) {
+      console.log(`existence check failed (attempt ${attempt + 1}): ${e}`)
+      await new Promise(r => setTimeout(r, 2000))
+    }
+  }
+  // Saving is an upsert, so re-crawling a known site is safe, just slower.
+  return domains
 }
 
 async function scrapeJina(domain: string): Promise<string | null> {
@@ -129,40 +144,40 @@ async function saveSite(site: any): Promise<void> {
   if (!r.ok) throw new Error(await r.text())
 }
 
-async function crawlOne(domain: string, index: number, total: number): Promise<void> {
+async function crawlOne(domain: string, label: string): Promise<boolean> {
   try {
-    const exists = await alreadyCrawled(domain)
-    if (exists) { console.log(`[${index}/${total}] skip ${domain}`); return }
-
     let content = await scrapeJina(domain)
     if (!content) content = await scrapeBasic(domain)
 
     let lawp: any
     if (!content) {
-      console.log(`[${index}/${total}] blocked — saving minimal ${domain}`)
+      console.log(`${label} blocked — saving minimal ${domain}`)
       lawp = minimal(domain)
     } else {
       lawp = await toLAWP(domain, content)
     }
 
     await saveSite(lawp)
-    console.log(`[${index}/${total}] SAVED ${domain}`)
+    console.log(`${label} SAVED ${domain}`)
     await new Promise(r => setTimeout(r, 300))
+    return true
   } catch(e) {
-    console.log(`[${index}/${total}] error ${domain}: ${e}`)
+    console.log(`${label} error ${domain}: ${e}`)
+    return false
   }
 }
 
-async function run(domains: string[], concurrency: number): Promise<void> {
+async function run(domains: string[], concurrency: number, labelFor: (i: number) => string): Promise<number> {
   let index = 0
-  const total = domains.length
+  let saved = 0
   async function worker(): Promise<void> {
-    while (index < total) {
+    while (index < domains.length) {
       const i = index++
-      await crawlOne(domains[i], i + 1, total)
+      if (await crawlOne(domains[i], labelFor(i))) saved++
     }
   }
   await Promise.all(Array.from({ length: concurrency }, () => worker()))
+  return saved
 }
 
 async function main() {
@@ -171,16 +186,28 @@ async function main() {
   console.log("Loading CSV...")
   const all = await loadCSV(csvPath)
   console.log("Total: " + all.length)
-  const offset = await getOffset()
-  console.log("Offset: " + offset)
-  const batch = all.slice(offset, offset + CRAWL_LIMIT)
-  if (batch.length === 0) { console.log("End of CSV — resetting"); await saveOffset(0); return }
-  const next = offset + CRAWL_LIMIT
-  console.log(`Crawling ${batch.length} sites (pos ${offset}–${next})`)
+  let pos = await getOffset()
+  if (pos >= all.length) pos = 0
+  console.log(`Offset: ${pos} — crawling up to ${CRAWL_LIMIT} new sites, ${TIME_BUDGET_MS / 60000} min budget`)
+
   const start = Date.now()
-  await run(batch, CONCURRENCY)
-  await saveOffset(next >= all.length ? 0 : next)
-  console.log(`Done in ${Math.round((Date.now()-start)/60000)} min. Next: ${next}`)
+  let attempted = 0, saved = 0, skipped = 0
+
+  while (pos < all.length && attempted < CRAWL_LIMIT && Date.now() - start < TIME_BUDGET_MS) {
+    const chunk = all.slice(pos, pos + CHUNK_SIZE)
+    const todo = await filterUncrawled(chunk)
+    skipped += chunk.length - todo.length
+    const base = attempted
+    saved += await run(todo, CONCURRENCY, i => `[${base + i + 1}]`)
+    attempted += todo.length
+    pos += chunk.length
+    // Checkpoint after every chunk so a cancelled or timed-out run keeps its progress.
+    await saveOffset(pos >= all.length ? 0 : pos)
+    console.log(`— pos ${pos}/${all.length} · saved ${saved} · already indexed ${skipped} · ${Math.round((Date.now() - start) / 60000)} min`)
+  }
+
+  if (pos >= all.length) console.log("End of CSV — offset reset to 0")
+  console.log(`Done in ${Math.round((Date.now() - start) / 60000)} min. Saved ${saved}, skipped ${skipped} already indexed. Next offset: ${pos >= all.length ? 0 : pos}`)
 }
 
 main()
