@@ -2,7 +2,7 @@
   "name": "actuent-crawler",
   "version": "1.0.0",
   "dependencies": {
-    "groq-sdk": "^0.9.0",
+    "groq-sdk": "^1.6.0",
     "tsx": "^4.0.0"
   }
 }
