@@ -1,4 +1,5 @@
-import { SUPABASE_URL, SUPABASE_SERVICE_KEY, fetchNative, scrapeJina, scrapeBasic, minimal, toLAWP, saveSite, contentHash, robotsAllows } from "./shared"
+import { SUPABASE_URL, SUPABASE_SERVICE_KEY, fetchNative, fetchSite, minimal, toLAWP, saveSite, contentHash, robotsAllows } from "./shared"
+import { heuristicLAWP, INFRASTRUCTURE } from "./heuristic"
 import fs from "fs"
 import readline from "readline"
 
@@ -27,6 +28,7 @@ async function loadCSV(path: string): Promise<string[]> {
     if (!d || !d.includes(".") || d.startsWith("#")) continue
     if (SKIP.has(d)) continue
     if (SKIP_TLDS.some(t => d.endsWith(t))) continue
+    if (INFRASTRUCTURE.test(d + ".")) continue // DNS/CDN/ad hosts, not websites
     domains.push(d)
   }
   return domains
@@ -87,23 +89,29 @@ async function crawlOne(domain: string, label: string): Promise<Outcome> {
       console.log(`${label} robots.txt disallows ${domain} — skipped`)
       return "skipped"
     }
-    let content = native ? null : await scrapeJina(domain)
-    if (!native && !content) content = await scrapeBasic(domain)
+    const page = native ? null : await fetchSite(domain)
 
     let lawp: any
+    let conversion: "native" | "llm" | "heuristic" | "minimal"
     if (native) {
       console.log(`${label} native LAWP ${domain}`)
-      lawp = native
-    } else if (!content) {
+      lawp = native; conversion = "native"
+    } else if (!page) {
       console.log(`${label} blocked — saving minimal ${domain}`)
-      lawp = minimal(domain)
+      lawp = minimal(domain); conversion = "minimal"
     } else {
-      lawp = await toLAWP(domain, content)
+      lawp = await toLAWP(domain, page.text)
+      conversion = "llm"
+      // No LLM available (or unusable output): build it from the page itself instead.
+      if (!Array.isArray(lawp.actions) || lawp.actions.length === 0) {
+        const rules = heuristicLAWP(domain, page.raw, page.isHtml)
+        if (rules) { lawp = rules; conversion = "heuristic" } else { conversion = "minimal" }
+      }
     }
 
-    await saveSite(lawp, content ? contentHash(content) : undefined)
-    const full = !!native || (Array.isArray(lawp.actions) && lawp.actions.length > 0)
-    console.log(`${label} SAVED${full ? "" : " (minimal)"} ${domain}`)
+    await saveSite(lawp, page ? contentHash(page.text) : undefined, conversion)
+    const full = conversion !== "minimal"
+    console.log(`${label} SAVED (${conversion}) ${domain}`)
     await new Promise(r => setTimeout(r, 300))
     return full ? "full" : "minimal"
   } catch(e) {

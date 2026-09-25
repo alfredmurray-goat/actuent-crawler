@@ -32,6 +32,31 @@ export function cleanScraped(text: string): string {
     .trim()
 }
 
+export type Fetched = { text: string, raw: string, isHtml: boolean }
+
+// The homepage as raw HTML (forms, links, meta tags: best for the rule-based converter), falling
+// back to Jina Reader markdown for blocked or JavaScript-only sites. `text` is clean text for the LLM.
+export async function fetchSite(domain: string): Promise<Fetched | null> {
+  try {
+    const r = await fetch(`https://${domain}`, { headers: { "User-Agent": USER_AGENT, "Accept": "text/html" }, signal: AbortSignal.timeout(8000) })
+    if (r.ok && (r.headers.get("content-type") || "").includes("html")) {
+      const raw = (await r.text()).slice(0, 400_000)
+      const text = raw.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/gi, " ").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim()
+      if (text.length >= 300) return { text: text.slice(0, 3000), raw, isHtml: true }
+    }
+  } catch {}
+  try {
+    const r = await fetch(`https://r.jina.ai/https://${domain}`, {
+      headers: { "Accept": "text/plain", ...(process.env.JINA_API_KEY ? { "Authorization": `Bearer ${process.env.JINA_API_KEY}` } : {}) },
+      signal: AbortSignal.timeout(15000)
+    })
+    if (!r.ok) return null
+    const raw = (await r.text()).slice(0, 100_000)
+    if (raw.length < 50) return null
+    return { text: cleanScraped(raw).slice(0, 3000), raw, isHtml: false }
+  } catch { return null }
+}
+
 // A site's own LAWP from https://<domain>/.well-known/lawp.json always wins over crawling.
 export async function fetchNative(domain: string): Promise<any | null> {
   try {
@@ -52,7 +77,7 @@ export async function fetchNative(domain: string): Promise<any | null> {
 export async function scrapeJina(domain: string): Promise<string | null> {
   try {
     const r = await fetch(`https://r.jina.ai/https://${domain}`, {
-      headers: { "Accept": "text/plain" },
+      headers: { "Accept": "text/plain", ...(process.env.JINA_API_KEY ? { "Authorization": `Bearer ${process.env.JINA_API_KEY}` } : {}) },
       signal: AbortSignal.timeout(12000)
     })
     if (!r.ok) return null
@@ -106,11 +131,12 @@ export async function toLAWP(domain: string, content: string): Promise<any> {
   }
 }
 
-export async function saveSite(site: any, hash?: string): Promise<void> {
+export async function saveSite(site: any, hash?: string, conversion?: "native" | "llm" | "heuristic" | "minimal"): Promise<void> {
   const base = { domain: site.domain, name: site.name, pages: site.pages, actions: site.actions, updated_at: new Date().toISOString() }
   const lang = site.language ? { language: site.language } : {}
   // Newest schema first; older databases lack native (lawp_actions.sql) or content_hash (groq_quota.sql).
   const attempts = [
+    { ...base, ...lang, native: !!site.native, ...(hash ? { content_hash: hash } : {}), ...(conversion ? { conversion } : {}) },
     { ...base, ...lang, native: !!site.native, ...(hash ? { content_hash: hash } : {}) },
     { ...base, native: !!site.native },
     base

@@ -33,5 +33,6 @@ jobs:
       - run: npx tsx subpages.ts
         env:
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          JINA_API_KEY: ${{ secrets.JINA_API_KEY }}
           SUBPAGE_TOP: ${{ inputs.top || '20000' }}
           TIME_BUDGET_MIN: ${{ inputs.minutes || '120' }}
