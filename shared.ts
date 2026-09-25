@@ -69,7 +69,11 @@ export async function toLAWP(domain: string, content: string): Promise<any> {
     if (m) { try { parsed = JSON.parse(m[0]) } catch {} }
   }
   const pages = parsed?.pages
-  if (!pages || typeof pages !== "object" || Array.isArray(pages) || Object.keys(pages).length === 0) return minimal(domain, content)
+  if (!pages || typeof pages !== "object" || Array.isArray(pages) || Object.keys(pages).length === 0) {
+    console.log(`llm: unusable LAWP for ${domain}: ${raw.replace(/\s+/g, " ").slice(0, 160)}`)
+    return minimal(domain, content)
+  }
+  if (!Array.isArray(parsed.actions) || parsed.actions.length === 0) console.log(`llm: no actions for ${domain}`)
   return {
     domain,
     name: typeof parsed.name === "string" && parsed.name ? parsed.name : minimal(domain).name,
