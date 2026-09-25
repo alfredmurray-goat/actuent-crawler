@@ -1,6 +1,5 @@
-import { complete } from "./llm"
+import { SUPABASE_URL, SUPABASE_HEADERS, fetchNative, scrapeJina, toLAWP, saveSite, contentHash } from "./shared"
 
-const SUPABASE_URL = "https://bcmwypjrahtxogytsvuc.supabase.co"
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY!
 
 async function getPopularDomains(): Promise<string[]> {
@@ -31,44 +30,23 @@ async function needsRecrawl(domain: string): Promise<boolean> {
   return Date.now() - updatedAt > 7 * 86400000
 }
 
-async function scrapeWithJina(domain: string): Promise<string | null> {
-  try {
-    const res = await fetch(`https://r.jina.ai/https://${domain}`, {
-      headers: { "Accept": "text/plain" },
-      signal: AbortSignal.timeout(15000)
-    })
-    if (!res.ok) return null
-    return (await res.text()).slice(0, 3000)
-  } catch { return null }
-}
 
 async function recrawlSite(domain: string): Promise<void> {
-  const content = await scrapeWithJina(domain)
+  const native = await fetchNative(domain)
+  if (native) { await saveSite(native); console.log(`native: ${domain}`); return }
+
+  const content = await scrapeJina(domain)
   if (!content) { console.log(`blocked: ${domain}`); return }
 
-  const raw = await complete(`Convert to LAWP JSON:\n\nDomain: ${domain}\nContent: ${content}\n\nReturn ONLY: {"domain":"${domain}","name":"Name","pages":{"/":{"title":"T","content":"C"}},"actions":[{"id":"i","name":"N","description":"D","intent":["k1","k2","k3"],"input":{"type":"text","required":false}}]}`)
-  if (!raw) { console.log(`no model available, kept existing LAWP: ${domain}`); return }
+  // Unchanged content: keep the existing LAWP and spend no LLM tokens.
+  const hash = contentHash(content)
+  const existing = await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?select=content_hash&domain=eq.${encodeURIComponent(domain)}`, { headers: SUPABASE_HEADERS })
+  if (existing.ok && (await existing.json())?.[0]?.content_hash === hash) { console.log(`unchanged: ${domain}`); return }
 
-  let lawp: any = null
-  try { lawp = JSON.parse(raw) } catch {
-    const match = raw.match(/\{[\s\S]*\}/)
-    if (match) { try { lawp = JSON.parse(match[0]) } catch {} }
-  }
-  // Never overwrite a good LAWP with a malformed one.
-  if (!lawp?.pages || typeof lawp.pages !== "object" || Object.keys(lawp.pages).length === 0) {
-    console.log(`bad LAWP, kept existing: ${domain}`)
-    return
-  }
-
-  await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?domain=eq.${domain}`, {
-    method: "PATCH",
-    headers: {
-      "apikey": SUPABASE_SERVICE_KEY,
-      "Authorization": `Bearer ${SUPABASE_SERVICE_KEY}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({ name: lawp.name, pages: lawp.pages, actions: lawp.actions, updated_at: new Date().toISOString() })
-  })
+  const lawp = await toLAWP(domain, content)
+  // Never overwrite a good LAWP with a minimal one.
+  if (!Array.isArray(lawp.actions) || lawp.actions.length === 0) { console.log(`no usable LAWP, kept existing: ${domain}`); return }
+  await saveSite(lawp, hash)
   console.log(`recrawled: ${domain}`)
 }
 

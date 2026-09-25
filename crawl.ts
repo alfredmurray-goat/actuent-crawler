@@ -1,4 +1,4 @@
-import { SUPABASE_URL, SUPABASE_SERVICE_KEY, fetchNative, scrapeJina, scrapeBasic, minimal, toLAWP, saveSite } from "./shared"
+import { SUPABASE_URL, SUPABASE_SERVICE_KEY, fetchNative, scrapeJina, scrapeBasic, minimal, toLAWP, saveSite, contentHash } from "./shared"
 import fs from "fs"
 import readline from "readline"
 
@@ -14,7 +14,7 @@ const SKIP = new Set(["google.com","youtube.com","facebook.com","twitter.com","i
 const SKIP_TLDS = [".tk",".ml",".ga",".cf",".gq",".xxx"]
 
 if (!SUPABASE_SERVICE_KEY) { console.error("Missing SUPABASE_SERVICE_KEY"); process.exit(1) }
-if (!process.env.GROQ_API_KEY) { console.error("Missing GROQ_API_KEY"); process.exit(1) }
+if (!process.env.GROQ_API_KEY && !process.env.GEMINI_API_KEY && !process.env.MISTRAL_API_KEY) { console.error("Missing an LLM key (GROQ_API_KEY, GEMINI_API_KEY or MISTRAL_API_KEY)"); process.exit(1) }
 
 async function loadCSV(path: string): Promise<string[]> {
   const domains: string[] = []
@@ -93,7 +93,7 @@ async function crawlOne(domain: string, label: string): Promise<boolean> {
       lawp = await toLAWP(domain, content)
     }
 
-    await saveSite(lawp)
+    await saveSite(lawp, content ? contentHash(content) : undefined)
     console.log(`${label} SAVED ${domain}`)
     await new Promise(r => setTimeout(r, 300))
     return true

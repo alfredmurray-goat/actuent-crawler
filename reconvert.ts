@@ -1,4 +1,4 @@
-import { SUPABASE_URL, SUPABASE_HEADERS, fetchNative, scrapeJina, scrapeBasic, toLAWP, saveSite } from "./shared"
+import { SUPABASE_URL, SUPABASE_HEADERS, fetchNative, scrapeJina, scrapeBasic, toLAWP, saveSite, contentHash } from "./shared"
 
 // Improves minimal "Website at …" entries (saved when the crawler was blocked or out of Groq
 // quota): re-scrape them and convert properly. Oldest first; sites that still can't be improved
@@ -10,7 +10,7 @@ const CONCURRENCY = parseInt(process.env.RECONVERT_CONCURRENCY || "1")
 const MAX_CONSECUTIVE_LLM_FAILURES = 10
 
 if (!process.env.SUPABASE_SERVICE_KEY) { console.error("Missing SUPABASE_SERVICE_KEY"); process.exit(1) }
-if (!process.env.GROQ_API_KEY) { console.error("Missing GROQ_API_KEY"); process.exit(1) }
+if (!process.env.GROQ_API_KEY && !process.env.GEMINI_API_KEY && !process.env.MISTRAL_API_KEY) { console.error("Missing an LLM key"); process.exit(1) }
 
 async function minimalDomains(): Promise<string[]> {
   const r = await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?select=domain&actions=eq.%5B%5D&order=updated_at.asc&limit=${LIMIT}`, { headers: SUPABASE_HEADERS })
@@ -43,7 +43,7 @@ async function main() {
 
         const lawp = await toLAWP(domain, content)
         if (Array.isArray(lawp.actions) && lawp.actions.length > 0) {
-          await saveSite(lawp); improved++; llmFailures = 0
+          await saveSite(lawp, contentHash(content)); improved++; llmFailures = 0
           console.log(`improved ${domain}`)
         } else {
           await touch(domain); skipped++

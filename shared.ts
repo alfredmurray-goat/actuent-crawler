@@ -1,4 +1,5 @@
 import { complete } from "./llm"
+import crypto from "crypto"
 
 // Helpers shared by crawl.ts (mass crawl) and reconvert.ts (improving minimal entries).
 
@@ -7,6 +8,12 @@ export const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY!
 export const SUPABASE_HEADERS = {
   "apikey": SUPABASE_SERVICE_KEY,
   "Authorization": `Bearer ${SUPABASE_SERVICE_KEY}`
+}
+
+// Hash of scraped content: when a site hasn't changed, its existing LAWP is reused and no LLM
+// tokens are spent.
+export function contentHash(content: string): string {
+  return crypto.createHash("sha256").update(content).digest("hex").slice(0, 32)
 }
 
 // A site's own LAWP from https://<domain>/.well-known/lawp.json always wins over crawling.
@@ -61,7 +68,7 @@ export function minimal(domain: string, content: string = ""): any {
 }
 
 export async function toLAWP(domain: string, content: string): Promise<any> {
-  const raw = await complete(`Convert to LAWP JSON.\n\nDomain: ${domain}\nContent: ${content}\n\nReturn ONLY valid JSON:\n{"domain":"${domain}","name":"Name","pages":{"/":{"title":"T","content":"Summary under 100 words"}},"actions":[{"id":"id","name":"N","description":"D","intent":["k1","k2","k3"],"input":{"type":"text","required":false}}]}\n\nInclude 2-4 real actions only.`)
+  const raw = await complete(`Convert to LAWP JSON.\n\nDomain: ${domain}\nContent: ${content.slice(0, 2000)}\n\nReturn ONLY valid JSON:\n{"domain":"${domain}","name":"Name","pages":{"/":{"title":"T","content":"Summary under 100 words"}},"actions":[{"id":"id","name":"N","description":"D","intent":["k1","k2","k3"],"input":{"type":"text","required":false}}]}\n\nInclude 2-4 real actions only.`)
   if (!raw) return minimal(domain, content)
   let parsed: any = null
   try { parsed = JSON.parse(raw) } catch {
@@ -82,25 +89,24 @@ export async function toLAWP(domain: string, content: string): Promise<any> {
   }
 }
 
-export async function saveSite(site: any): Promise<void> {
-  const r = await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?on_conflict=domain`, {
-    method: "POST",
-    headers: {
-      "apikey": SUPABASE_SERVICE_KEY,
-      "Authorization": `Bearer ${SUPABASE_SERVICE_KEY}`,
-      "Content-Type": "application/json",
-      "Prefer": "resolution=merge-duplicates"
-    },
-    body: JSON.stringify({ domain: site.domain, name: site.name, pages: site.pages, actions: site.actions, native: !!site.native, updated_at: new Date().toISOString() })
-  })
-  if (!r.ok) {
-    // Before lawp_actions.sql has run there's no `native` column; retry without it.
-    const retry = await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?on_conflict=domain`, {
+export async function saveSite(site: any, hash?: string): Promise<void> {
+  const base = { domain: site.domain, name: site.name, pages: site.pages, actions: site.actions, updated_at: new Date().toISOString() }
+  // Newest schema first; older databases lack native (lawp_actions.sql) or content_hash (groq_quota.sql).
+  const attempts = [
+    { ...base, native: !!site.native, ...(hash ? { content_hash: hash } : {}) },
+    { ...base, native: !!site.native },
+    base
+  ]
+  let lastError = ""
+  for (const body of attempts) {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?on_conflict=domain`, {
       method: "POST",
       headers: { ...SUPABASE_HEADERS, "Content-Type": "application/json", "Prefer": "resolution=merge-duplicates" },
-      body: JSON.stringify({ domain: site.domain, name: site.name, pages: site.pages, actions: site.actions, updated_at: new Date().toISOString() })
+      body: JSON.stringify(body)
     })
-    if (!retry.ok) throw new Error(await retry.text())
+    if (r.ok) return
+    lastError = await r.text()
   }
+  throw new Error(lastError)
 }
 

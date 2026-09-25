@@ -37,5 +37,7 @@ jobs:
         env:
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
           CRAWL_LIMIT: ${{ inputs.limit || '100000' }}
           TIME_BUDGET_MIN: ${{ inputs.minutes || '320' }}
