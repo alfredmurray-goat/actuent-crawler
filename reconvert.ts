@@ -17,8 +17,9 @@ if (!process.env.SUPABASE_SERVICE_KEY) { console.error("Missing SUPABASE_SERVICE
 
 type Row = { domain: string, conversion: string | null }
 
-async function backlog(): Promise<Row[]> {
-  const base = `${SUPABASE_URL}/rest/v1/lawp_sites?owner_key=is.null&order=updated_at.asc&limit=${LIMIT}`
+// Supabase returns at most 1000 rows per request, so the run fetches batches until LIMIT.
+async function backlog(size: number): Promise<Row[]> {
+  const base = `${SUPABASE_URL}/rest/v1/lawp_sites?owner_key=is.null&order=updated_at.asc&limit=${size}`
   // With the `conversion` column (crawler_upgrade.sql): minimal and rule-based entries.
   let r = await fetch(`${base}&select=domain,conversion&or=(actions.eq.%5B%5D,conversion.eq.heuristic)`, { headers: SUPABASE_HEADERS })
   if (!r.ok) r = await fetch(`${base}&select=domain&actions=eq.%5B%5D`, { headers: SUPABASE_HEADERS })
@@ -36,10 +37,8 @@ async function touch(domain: string): Promise<void> {
 
 async function main() {
   const start = Date.now()
-  const rows = await backlog()
-  console.log(`Backlog batch: ${rows.length} sites (${rows.filter(r => r.conversion === "heuristic").length} rule-based to upgrade)`)
   const tally = { llm: 0, heuristic: 0, native: 0, unchanged: 0, skipped: 0, error: 0 }
-  let index = 0, llmFailures = 0
+  let processed = 0, llmFailures = 0
   // LLM calls run one at a time: the free per-minute limits can't take parallel requests.
   let llmQueue: Promise<unknown> = Promise.resolve()
   const llm = (domain: string, text: string) => {
@@ -47,6 +46,13 @@ async function main() {
     llmQueue = run.catch(() => {})
     return run
   }
+
+  while (processed < LIMIT && Date.now() - start < TIME_BUDGET_MS) {
+  // Every processed site gets a new updated_at, so each batch is the next-oldest part of the backlog.
+  const rows = await backlog(Math.min(1000, LIMIT - processed))
+  if (!rows.length) { console.log("Backlog is empty"); break }
+  console.log(`Batch: ${rows.length} sites (${rows.filter(r => r.conversion === "heuristic").length} rule-based to upgrade) · ${processed} done so far`)
+  let index = 0
 
   async function worker() {
     while (index < rows.length && Date.now() - start < TIME_BUDGET_MS) {
@@ -86,6 +92,8 @@ async function main() {
   }
 
   await Promise.all(Array.from({ length: CONCURRENCY }, () => worker()))
+  processed += rows.length
+  }
   console.log(`Done in ${Math.round((Date.now() - start) / 60000)} min. LLM ${tally.llm}, rule-based ${tally.heuristic}, native ${tally.native}, unchanged ${tally.unchanged}, skipped ${tally.skipped}, errors ${tally.error}.`)
 }
 
