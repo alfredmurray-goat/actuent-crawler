@@ -13,7 +13,7 @@ if (!process.env.SUPABASE_SERVICE_KEY) { console.error("Missing SUPABASE_SERVICE
 if (!process.env.GROQ_API_KEY && !process.env.GEMINI_API_KEY && !process.env.MISTRAL_API_KEY) { console.error("Missing an LLM key"); process.exit(1) }
 
 async function minimalDomains(): Promise<string[]> {
-  const r = await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?select=domain&actions=eq.%5B%5D&order=updated_at.asc&limit=${LIMIT}`, { headers: SUPABASE_HEADERS })
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?select=domain&actions=eq.%5B%5D&owner_key=is.null&order=updated_at.asc&limit=${LIMIT}`, { headers: SUPABASE_HEADERS })
   if (!r.ok) throw new Error(`Could not load minimal sites: ${r.status} ${await r.text()}`)
   return (await r.json()).map((row: any) => row.domain)
 }

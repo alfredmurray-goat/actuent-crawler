@@ -68,7 +68,7 @@ async function fetchPage(domain: string, path: string): Promise<{ title: string,
 
 async function candidates(domains: string[]): Promise<any[]> {
   const list = encodeURIComponent(domains.map(d => `"${d}"`).join(","))
-  const r = await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?select=domain,pages&domain=in.(${list})&subpages_crawled_at=is.null&actions=neq.%5B%5D`, { headers: SUPABASE_HEADERS })
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?select=domain,pages&domain=in.(${list})&subpages_crawled_at=is.null&owner_key=is.null&actions=neq.%5B%5D`, { headers: SUPABASE_HEADERS })
   if (!r.ok) throw new Error(`Could not load sites: ${r.status} ${await r.text()}`)
   return r.json()
 }

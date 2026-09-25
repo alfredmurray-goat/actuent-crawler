@@ -4,7 +4,9 @@ import readline from "readline"
 
 const CONCURRENCY = parseInt(process.env.CONCURRENCY || "5")
 // Max NEW sites per run. Already-indexed domains don't count towards this.
-const CRAWL_LIMIT = parseInt(process.env.CRAWL_LIMIT || "35000")
+// Target number of sites saved WITH real content. Blocked, robots-disallowed, errored and
+// minimal-only sites don't count, so each one adds one more site to the run.
+const CRAWL_LIMIT = parseInt(process.env.CRAWL_LIMIT || "20000")
 // Stop starting new sites after this many minutes so the run finishes before GitHub's job timeout.
 const TIME_BUDGET_MS = parseInt(process.env.TIME_BUDGET_MIN || "320") * 60000
 // Domains checked against Supabase per request. The offset is checkpointed after each chunk.
@@ -76,12 +78,14 @@ async function filterUncrawled(domains: string[]): Promise<string[]> {
 
 
 
-async function crawlOne(domain: string, label: string): Promise<boolean> {
+type Outcome = "full" | "minimal" | "skipped" | "error"
+
+async function crawlOne(domain: string, label: string): Promise<Outcome> {
   try {
     const native = await fetchNative(domain)
     if (!native && !await robotsAllows(domain, "/")) {
       console.log(`${label} robots.txt disallows ${domain} — skipped`)
-      return false
+      return "skipped"
     }
     let content = native ? null : await scrapeJina(domain)
     if (!native && !content) content = await scrapeBasic(domain)
@@ -98,26 +102,27 @@ async function crawlOne(domain: string, label: string): Promise<boolean> {
     }
 
     await saveSite(lawp, content ? contentHash(content) : undefined)
-    console.log(`${label} SAVED ${domain}`)
+    const full = !!native || (Array.isArray(lawp.actions) && lawp.actions.length > 0)
+    console.log(`${label} SAVED${full ? "" : " (minimal)"} ${domain}`)
     await new Promise(r => setTimeout(r, 300))
-    return true
+    return full ? "full" : "minimal"
   } catch(e) {
     console.log(`${label} error ${domain}: ${e}`)
-    return false
+    return "error"
   }
 }
 
-async function run(domains: string[], concurrency: number, labelFor: (i: number) => string): Promise<number> {
+async function run(domains: string[], concurrency: number, labelFor: (i: number) => string): Promise<Record<Outcome, number>> {
   let index = 0
-  let saved = 0
+  const tally: Record<Outcome, number> = { full: 0, minimal: 0, skipped: 0, error: 0 }
   async function worker(): Promise<void> {
     while (index < domains.length) {
       const i = index++
-      if (await crawlOne(domains[i], labelFor(i))) saved++
+      tally[await crawlOne(domains[i], labelFor(i))]++
     }
   }
   await Promise.all(Array.from({ length: concurrency }, () => worker()))
-  return saved
+  return tally
 }
 
 async function main() {
@@ -131,23 +136,26 @@ async function main() {
   console.log(`Offset: ${pos} — crawling up to ${CRAWL_LIMIT} new sites, ${TIME_BUDGET_MS / 60000} min budget`)
 
   const start = Date.now()
-  let attempted = 0, saved = 0, skipped = 0
+  let attempted = 0, alreadyIndexed = 0
+  const totals: Record<Outcome, number> = { full: 0, minimal: 0, skipped: 0, error: 0 }
 
-  while (pos < all.length && attempted < CRAWL_LIMIT && Date.now() - start < TIME_BUDGET_MS) {
+  // Keep going until CRAWL_LIMIT sites are saved with real content (or time runs out).
+  while (pos < all.length && totals.full < CRAWL_LIMIT && Date.now() - start < TIME_BUDGET_MS) {
     const chunk = all.slice(pos, pos + CHUNK_SIZE)
     const todo = await filterUncrawled(chunk)
-    skipped += chunk.length - todo.length
+    alreadyIndexed += chunk.length - todo.length
     const base = attempted
-    saved += await run(todo, CONCURRENCY, i => `[${base + i + 1}]`)
+    const tally = await run(todo, CONCURRENCY, i => `[${base + i + 1}]`)
+    for (const k of Object.keys(tally) as Outcome[]) totals[k] += tally[k]
     attempted += todo.length
     pos += chunk.length
     // Checkpoint after every chunk so a cancelled or timed-out run keeps its progress.
     await saveOffset(pos >= all.length ? 0 : pos)
-    console.log(`— pos ${pos}/${all.length} · saved ${saved} · already indexed ${skipped} · ${Math.round((Date.now() - start) / 60000)} min`)
+    console.log(`— pos ${pos}/${all.length} · full ${totals.full}/${CRAWL_LIMIT} · minimal ${totals.minimal} · skipped ${totals.skipped} · errors ${totals.error} · already indexed ${alreadyIndexed} · ${Math.round((Date.now() - start) / 60000)} min`)
   }
 
   if (pos >= all.length) console.log("End of CSV — offset reset to 0")
-  console.log(`Done in ${Math.round((Date.now() - start) / 60000)} min. Saved ${saved}, skipped ${skipped} already indexed. Next offset: ${pos >= all.length ? 0 : pos}`)
+  console.log(`Done in ${Math.round((Date.now() - start) / 60000)} min. Full ${totals.full}, minimal ${totals.minimal}, skipped ${totals.skipped}, errors ${totals.error}, already indexed ${alreadyIndexed}. Next offset: ${pos >= all.length ? 0 : pos}`)
 }
 
 main()

@@ -5,8 +5,8 @@ on:
   workflow_dispatch:
     inputs:
       limit:
-        description: 'Max NEW sites to crawl this run (35K takes about 4 hours; indexed sites are skipped for free)'
-        default: '35000'
+        description: 'Sites to save WITH real content this run (blocked/minimal ones top it up; stops at the time budget)'
+        default: '20000'
         required: false
       minutes:
         description: 'Time budget in minutes before the run stops and saves its position'
@@ -39,5 +39,5 @@ jobs:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
-          CRAWL_LIMIT: ${{ inputs.limit || '35000' }}
+          CRAWL_LIMIT: ${{ inputs.limit || '20000' }}
           TIME_BUDGET_MIN: ${{ inputs.minutes || '320' }}

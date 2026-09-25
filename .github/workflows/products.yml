@@ -1,0 +1,37 @@
+name: Index Products
+on:
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+    inputs:
+      top:
+        description: 'How many of the top Tranco sites to check for shops'
+        default: '50000'
+        required: false
+      minutes:
+        description: 'Time budget in minutes'
+        default: '150'
+        required: false
+concurrency:
+  group: products
+  cancel-in-progress: false
+jobs:
+  products:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Download Tranco list
+        run: |
+          curl -L "https://tranco-list.eu/top-1m.csv.zip" -o tranco.zip
+          unzip tranco.zip
+          mv top-1m.csv tranco_PY69J.csv
+      - run: npm install
+      - run: npx tsx products.ts
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          PRODUCTS_TOP: ${{ inputs.top || '50000' }}
+          TIME_BUDGET_MIN: ${{ inputs.minutes || '150' }}

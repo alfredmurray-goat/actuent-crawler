@@ -41,8 +41,10 @@ async function recrawlSite(domain: string): Promise<void> {
 
   // Unchanged content: keep the existing LAWP and spend no LLM tokens.
   const hash = contentHash(content)
-  const existing = await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?select=content_hash&domain=eq.${encodeURIComponent(domain)}`, { headers: SUPABASE_HEADERS })
-  if (existing.ok && (await existing.json())?.[0]?.content_hash === hash) { console.log(`unchanged: ${domain}`); return }
+  const existing = await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?select=content_hash,owner_key&domain=eq.${encodeURIComponent(domain)}`, { headers: SUPABASE_HEADERS })
+  const row = existing.ok ? (await existing.json())?.[0] : null
+  if (row?.owner_key) { console.log(`claimed by owner, not overwritten: ${domain}`); return }
+  if (row?.content_hash === hash) { console.log(`unchanged: ${domain}`); return }
 
   const lawp = await toLAWP(domain, content)
   // Never overwrite a good LAWP with a minimal one.

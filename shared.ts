@@ -84,7 +84,7 @@ export function minimal(domain: string, content: string = ""): any {
 }
 
 export async function toLAWP(domain: string, content: string): Promise<any> {
-  const raw = await complete(`Convert to LAWP JSON.\n\nDomain: ${domain}\nContent: ${content.slice(0, 2000)}\n\nReturn ONLY valid JSON:\n{"domain":"${domain}","name":"Name","pages":{"/":{"title":"T","content":"Summary under 100 words"}},"actions":[{"id":"id","name":"N","description":"D","intent":["k1","k2","k3"],"input":{"type":"text","required":false}}]}\n\nInclude 2-4 real actions only.`)
+  const raw = await complete(`Convert to LAWP JSON.\n\nDomain: ${domain}\nContent: ${content.slice(0, 2000)}\n\nWrite every title, summary, description and intent in English, translating if the site is in another language. Set "language" to the ISO 639-1 code of the site's original language.\n\nReturn ONLY valid JSON:\n{"domain":"${domain}","name":"Name","language":"en","pages":{"/":{"title":"T","content":"Summary under 100 words"}},"actions":[{"id":"id","name":"N","description":"D","intent":["k1","k2","k3"],"input":{"type":"text","required":false}}]}\n\nInclude 2-4 real actions only.`)
   if (!raw) return minimal(domain, content)
   let parsed: any = null
   try { parsed = JSON.parse(raw) } catch {
@@ -101,15 +101,17 @@ export async function toLAWP(domain: string, content: string): Promise<any> {
     domain,
     name: typeof parsed.name === "string" && parsed.name ? parsed.name : minimal(domain).name,
     pages,
-    actions: Array.isArray(parsed.actions) ? parsed.actions : []
+    actions: Array.isArray(parsed.actions) ? parsed.actions : [],
+    language: typeof parsed.language === "string" && /^[a-z]{2}$/i.test(parsed.language) ? parsed.language.toLowerCase() : undefined
   }
 }
 
 export async function saveSite(site: any, hash?: string): Promise<void> {
   const base = { domain: site.domain, name: site.name, pages: site.pages, actions: site.actions, updated_at: new Date().toISOString() }
+  const lang = site.language ? { language: site.language } : {}
   // Newest schema first; older databases lack native (lawp_actions.sql) or content_hash (groq_quota.sql).
   const attempts = [
-    { ...base, native: !!site.native, ...(hash ? { content_hash: hash } : {}) },
+    { ...base, ...lang, native: !!site.native, ...(hash ? { content_hash: hash } : {}) },
     { ...base, native: !!site.native },
     base
   ]
