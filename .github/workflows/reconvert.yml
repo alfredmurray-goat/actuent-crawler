@@ -1,0 +1,28 @@
+name: Reconvert Minimal Sites
+on:
+  schedule:
+    - cron: '30 1 * * *'
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: 'How many minimal sites to try'
+        default: '150'
+        required: false
+concurrency:
+  group: reconvert
+  cancel-in-progress: false
+jobs:
+  reconvert:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install
+      - run: npx tsx reconvert.ts
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          RECONVERT_LIMIT: ${{ inputs.limit || '150' }}

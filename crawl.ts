@@ -1,9 +1,7 @@
-import { complete } from "./llm"
+import { SUPABASE_URL, SUPABASE_SERVICE_KEY, fetchNative, scrapeJina, scrapeBasic, minimal, toLAWP, saveSite } from "./shared"
 import fs from "fs"
 import readline from "readline"
 
-const SUPABASE_URL = "https://bcmwypjrahtxogytsvuc.supabase.co"
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY!
 const CONCURRENCY = parseInt(process.env.CONCURRENCY || "5")
 // Max NEW sites per run. Already-indexed domains don't count towards this.
 const CRAWL_LIMIT = parseInt(process.env.CRAWL_LIMIT || "100000")
@@ -73,79 +71,22 @@ async function filterUncrawled(domains: string[]): Promise<string[]> {
   return domains
 }
 
-async function scrapeJina(domain: string): Promise<string | null> {
-  try {
-    const r = await fetch(`https://r.jina.ai/https://${domain}`, {
-      headers: { "Accept": "text/plain" },
-      signal: AbortSignal.timeout(12000)
-    })
-    if (!r.ok) return null
-    const t = await r.text()
-    return t && t.length > 50 ? t.slice(0, 3000) : null
-  } catch { return null }
-}
 
-async function scrapeBasic(domain: string): Promise<string | null> {
-  try {
-    const r = await fetch(`https://${domain}`, {
-      headers: { "User-Agent": "Mozilla/5.0 (compatible; Actuent/1.0; +https://actuent.ai)" },
-      signal: AbortSignal.timeout(8000)
-    })
-    if (!r.ok) return null
-    const html = await r.text()
-    return html.replace(/<script[\s\S]*?<\/script>/gi,"").replace(/<style[\s\S]*?<\/style>/gi,"").replace(/<[^>]+>/g," ").replace(/\s+/g," ").trim().slice(0,3000)
-  } catch { return null }
-}
 
-function minimal(domain: string, content: string = ""): any {
-  const name = domain.split(".")[0]
-  return {
-    domain,
-    name: name.charAt(0).toUpperCase() + name.slice(1),
-    pages: { "/": { title: domain, content: content.slice(0, 200) || `Website at ${domain}` } },
-    actions: []
-  }
-}
 
-async function toLAWP(domain: string, content: string): Promise<any> {
-  const raw = await complete(`Convert to LAWP JSON.\n\nDomain: ${domain}\nContent: ${content}\n\nReturn ONLY valid JSON:\n{"domain":"${domain}","name":"Name","pages":{"/":{"title":"T","content":"Summary under 100 words"}},"actions":[{"id":"id","name":"N","description":"D","intent":["k1","k2","k3"],"input":{"type":"text","required":false}}]}\n\nInclude 2-4 real actions only.`)
-  if (!raw) return minimal(domain, content)
-  let parsed: any = null
-  try { parsed = JSON.parse(raw) } catch {
-    const m = raw.match(/\{[\s\S]*\}/)
-    if (m) { try { parsed = JSON.parse(m[0]) } catch {} }
-  }
-  const pages = parsed?.pages
-  if (!pages || typeof pages !== "object" || Array.isArray(pages) || Object.keys(pages).length === 0) return minimal(domain, content)
-  return {
-    domain,
-    name: typeof parsed.name === "string" && parsed.name ? parsed.name : minimal(domain).name,
-    pages,
-    actions: Array.isArray(parsed.actions) ? parsed.actions : []
-  }
-}
 
-async function saveSite(site: any): Promise<void> {
-  const r = await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites`, {
-    method: "POST",
-    headers: {
-      "apikey": SUPABASE_SERVICE_KEY,
-      "Authorization": `Bearer ${SUPABASE_SERVICE_KEY}`,
-      "Content-Type": "application/json",
-      "Prefer": "resolution=merge-duplicates"
-    },
-    body: JSON.stringify({ domain: site.domain, name: site.name, pages: site.pages, actions: site.actions, updated_at: new Date().toISOString() })
-  })
-  if (!r.ok) throw new Error(await r.text())
-}
 
 async function crawlOne(domain: string, label: string): Promise<boolean> {
   try {
-    let content = await scrapeJina(domain)
-    if (!content) content = await scrapeBasic(domain)
+    const native = await fetchNative(domain)
+    let content = native ? null : await scrapeJina(domain)
+    if (!native && !content) content = await scrapeBasic(domain)
 
     let lawp: any
-    if (!content) {
+    if (native) {
+      console.log(`${label} native LAWP ${domain}`)
+      lawp = native
+    } else if (!content) {
       console.log(`${label} blocked — saving minimal ${domain}`)
       lawp = minimal(domain)
     } else {
