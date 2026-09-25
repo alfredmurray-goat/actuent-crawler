@@ -8,6 +8,8 @@ const groq = new Groq({ apiKey: process.env.GROQ_API_KEY })
 // key has access to. Override with GROQ_MODELS="a,b,c".
 const LIVE_SEARCH_MODELS = new Set(["openai/gpt-oss-20b", "openai/gpt-oss-120b", "llama-3.3-70b-versatile"])
 const NON_CHAT = /whisper|tts|guard|prompt-guard|distil|playai|orpheus|compound/i
+// Models that don't follow "return only JSON" instructions (they reply conversationally).
+const UNRELIABLE_JSON = /allam/i
 
 let modelsPromise: Promise<string[]> | null = null
 
@@ -20,7 +22,7 @@ function getModels(): Promise<string[]> {
       const list = await groq.models.list()
       const models = list.data
         .map((m: any) => m.id as string)
-        .filter(id => !LIVE_SEARCH_MODELS.has(id) && !NON_CHAT.test(id))
+        .filter(id => !LIVE_SEARCH_MODELS.has(id) && !NON_CHAT.test(id) && !UNRELIABLE_JSON.test(id))
         .sort()
       console.log(`llm: crawler models: ${models.join(", ") || "(none)"}`)
       return models
@@ -56,7 +58,11 @@ export async function complete(prompt: string, timeoutMs: number = 15000): Promi
       try {
         const completion = await groq.chat.completions.create({
           model,
-          messages: [{ role: "user", content: prompt }],
+          messages: [
+            { role: "system", content: "You convert website content into LAWP JSON. Reply with a single JSON object only, no prose." },
+            { role: "user", content: prompt }
+          ],
+          response_format: { type: "json_object" },
           temperature: 0.1,
           // Groq counts max tokens against per-minute limits (qwen's output limit is only
           // 1000/min), so keep it just above what a LAWP document needs.
