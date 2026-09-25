@@ -133,7 +133,30 @@ async function run(domains: string[], concurrency: number, labelFor: (i: number)
   return tally
 }
 
+// New sites are paused until the backlog has been retried once with the upgraded converter:
+// no minimal entry left that hasn't been touched since RECRAWL_CUTOFF. Resumes automatically.
+const RECRAWL_CUTOFF = process.env.RECRAWL_CUTOFF || "2026-09-26T12:00:00Z"
+
+async function backlogRemaining(): Promise<number | null> {
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?select=domain&actions=eq.%5B%5D&owner_key=is.null&updated_at=lt.${encodeURIComponent(RECRAWL_CUTOFF)}`, {
+      method: "HEAD",
+      headers: { "apikey": SUPABASE_SERVICE_KEY, "Authorization": `Bearer ${SUPABASE_SERVICE_KEY}`, "Prefer": "count=exact", "Range": "0-0" }
+    })
+    const total = r.headers.get("content-range")?.split("/")[1]
+    return total && total !== "*" ? Number(total) : null
+  } catch { return null }
+}
+
 async function main() {
+  if (process.env.IGNORE_BACKLOG !== "true") {
+    const remaining = await backlogRemaining()
+    if (remaining && remaining > 0) {
+      console.log(`Paused: ${remaining.toLocaleString()} backlog sites still to retry with the upgraded converter. New sites resume automatically once they're done (or run with IGNORE_BACKLOG=true).`)
+      return
+    }
+  }
+
   const csvPath = "./tranco_PY69J.csv"
   if (!fs.existsSync(csvPath)) { console.error("CSV not found: " + csvPath); process.exit(1) }
   console.log("Loading CSV...")

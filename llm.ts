@@ -115,7 +115,10 @@ export async function complete(prompt: string, timeoutMs: number = 15000): Promi
       } catch (e: any) {
         const status = e?.status
         const message = String(e?.message || e)
-        if (status === 429) blockedUntil.set(target.id, Date.now() + retryAfterMs(message, e?.retryAfter))
+        // Daily quotas (TPD/RPD) refill slowly on a rolling 24h window: don't wait on them, block the
+        // model for a while so callers fall back (e.g. to the rule-based converter) straight away.
+        if (status === 429 && /per day|TPD|RPD/i.test(message)) blockedUntil.set(target.id, Date.now() + 15 * 60000)
+        else if (status === 429) blockedUntil.set(target.id, Date.now() + retryAfterMs(message, e?.retryAfter))
         else if (status === 400 || status === 401 || status === 403 || status === 404) blockedUntil.set(target.id, Date.now() + 60 * 60000)
         console.log(`llm: ${target.id} failed (${status ?? "no status"}): ${message.replace(/.*on_demand` on /, "").slice(0, 200)}`)
       }

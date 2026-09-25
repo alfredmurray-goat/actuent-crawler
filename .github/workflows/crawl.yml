@@ -8,6 +8,10 @@ on:
         description: 'Sites to save WITH real content this run (blocked/minimal ones top it up; stops at the time budget)'
         default: '20000'
         required: false
+      ignore_backlog:
+        description: 'Crawl new sites even while the backlog is being retried'
+        default: 'false'
+        required: false
       minutes:
         description: 'Time budget in minutes before the run stops and saves its position'
         default: '320'
@@ -42,3 +46,4 @@ jobs:
           MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
           CRAWL_LIMIT: ${{ inputs.limit || '20000' }}
           TIME_BUDGET_MIN: ${{ inputs.minutes || '320' }}
+          IGNORE_BACKLOG: ${{ inputs.ignore_backlog || 'false' }}
