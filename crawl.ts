@@ -1,10 +1,10 @@
-import { SUPABASE_URL, SUPABASE_SERVICE_KEY, fetchNative, scrapeJina, scrapeBasic, minimal, toLAWP, saveSite, contentHash } from "./shared"
+import { SUPABASE_URL, SUPABASE_SERVICE_KEY, fetchNative, scrapeJina, scrapeBasic, minimal, toLAWP, saveSite, contentHash, robotsAllows } from "./shared"
 import fs from "fs"
 import readline from "readline"
 
 const CONCURRENCY = parseInt(process.env.CONCURRENCY || "5")
 // Max NEW sites per run. Already-indexed domains don't count towards this.
-const CRAWL_LIMIT = parseInt(process.env.CRAWL_LIMIT || "100000")
+const CRAWL_LIMIT = parseInt(process.env.CRAWL_LIMIT || "35000")
 // Stop starting new sites after this many minutes so the run finishes before GitHub's job timeout.
 const TIME_BUDGET_MS = parseInt(process.env.TIME_BUDGET_MIN || "320") * 60000
 // Domains checked against Supabase per request. The offset is checkpointed after each chunk.
@@ -79,6 +79,10 @@ async function filterUncrawled(domains: string[]): Promise<string[]> {
 async function crawlOne(domain: string, label: string): Promise<boolean> {
   try {
     const native = await fetchNative(domain)
+    if (!native && !await robotsAllows(domain, "/")) {
+      console.log(`${label} robots.txt disallows ${domain} — skipped`)
+      return false
+    }
     let content = native ? null : await scrapeJina(domain)
     if (!native && !content) content = await scrapeBasic(domain)
 

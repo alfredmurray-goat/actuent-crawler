@@ -1,4 +1,4 @@
-import { SUPABASE_URL, SUPABASE_HEADERS, fetchNative, scrapeJina, scrapeBasic, toLAWP, saveSite, contentHash } from "./shared"
+import { SUPABASE_URL, SUPABASE_HEADERS, fetchNative, scrapeJina, scrapeBasic, toLAWP, saveSite, contentHash, robotsAllows } from "./shared"
 
 // Improves minimal "Website at …" entries (saved when the crawler was blocked or out of Groq
 // quota): re-scrape them and convert properly. Oldest first; sites that still can't be improved
@@ -38,6 +38,7 @@ async function main() {
         const native = await fetchNative(domain)
         if (native) { await saveSite(native); improved++; console.log(`native   ${domain}`); continue }
 
+        if (!await robotsAllows(domain, "/")) { await touch(domain); skipped++; console.log(`robots   ${domain}`); continue }
         const content = await scrapeJina(domain) ?? await scrapeBasic(domain)
         if (!content) { await touch(domain); skipped++; console.log(`blocked  ${domain}`); continue }
 

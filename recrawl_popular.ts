@@ -1,4 +1,4 @@
-import { SUPABASE_URL, SUPABASE_HEADERS, fetchNative, scrapeJina, toLAWP, saveSite, contentHash } from "./shared"
+import { SUPABASE_URL, SUPABASE_HEADERS, fetchNative, scrapeJina, toLAWP, saveSite, contentHash, robotsAllows } from "./shared"
 
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY!
 
@@ -35,6 +35,7 @@ async function recrawlSite(domain: string): Promise<void> {
   const native = await fetchNative(domain)
   if (native) { await saveSite(native); console.log(`native: ${domain}`); return }
 
+  if (!await robotsAllows(domain, "/")) { console.log(`robots.txt disallows: ${domain}`); return }
   const content = await scrapeJina(domain)
   if (!content) { console.log(`blocked: ${domain}`); return }
 

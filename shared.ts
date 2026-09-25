@@ -1,5 +1,8 @@
 import { complete } from "./llm"
 import crypto from "crypto"
+import { USER_AGENT, robotsAllows } from "./robots"
+
+export { robotsAllows }
 
 // Helpers shared by crawl.ts (mass crawl) and reconvert.ts (improving minimal entries).
 
@@ -20,7 +23,7 @@ export function contentHash(content: string): string {
 export async function fetchNative(domain: string): Promise<any | null> {
   try {
     const r = await fetch(`https://${domain}/.well-known/lawp.json`, {
-      headers: { "Accept": "application/json", "User-Agent": "Actuent/1.0 (+https://actuent.ai)" },
+      headers: { "Accept": "application/json", "User-Agent": USER_AGENT },
       redirect: "manual",
       signal: AbortSignal.timeout(5000)
     })
@@ -48,7 +51,7 @@ export async function scrapeJina(domain: string): Promise<string | null> {
 export async function scrapeBasic(domain: string): Promise<string | null> {
   try {
     const r = await fetch(`https://${domain}`, {
-      headers: { "User-Agent": "Mozilla/5.0 (compatible; Actuent/1.0; +https://actuent.ai)" },
+      headers: { "User-Agent": USER_AGENT },
       signal: AbortSignal.timeout(8000)
     })
     if (!r.ok) return null

@@ -1,0 +1,37 @@
+name: Index Subpages
+on:
+  schedule:
+    - cron: '0 4 * * *'
+  workflow_dispatch:
+    inputs:
+      top:
+        description: 'How many of the top Tranco sites to cover'
+        default: '20000'
+        required: false
+      minutes:
+        description: 'Time budget in minutes'
+        default: '120'
+        required: false
+concurrency:
+  group: subpages
+  cancel-in-progress: false
+jobs:
+  subpages:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Download Tranco list
+        run: |
+          curl -L "https://tranco-list.eu/top-1m.csv.zip" -o tranco.zip
+          unzip tranco.zip
+          mv top-1m.csv tranco_PY69J.csv
+      - run: npm install
+      - run: npx tsx subpages.ts
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          SUBPAGE_TOP: ${{ inputs.top || '20000' }}
+          TIME_BUDGET_MIN: ${{ inputs.minutes || '120' }}
