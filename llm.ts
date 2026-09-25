@@ -3,13 +3,34 @@ import Groq from "groq-sdk"
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY })
 
 // Groq's free tier gives each model its own daily token quota, so when one model is used up
-// (or unavailable) we move on to the next. Live search (actuent-public) uses a different set
-// of models, so bulk crawling here can't use up its quota. Override with GROQ_MODELS="a,b,c".
-const MODELS = (process.env.GROQ_MODELS || [
-  "llama-3.1-8b-instant",
-  "meta-llama/llama-4-scout-17b-16e-instruct",
-  "qwen/qwen3-32b"
-].join(",")).split(",").map(m => m.trim()).filter(Boolean)
+// (or unavailable) we move on to the next. Live search (actuent-public) keeps these models to
+// itself so bulk crawling can't use up its quota; the crawler uses every other chat model the
+// key has access to. Override with GROQ_MODELS="a,b,c".
+const LIVE_SEARCH_MODELS = new Set(["openai/gpt-oss-20b", "openai/gpt-oss-120b", "llama-3.3-70b-versatile"])
+const NON_CHAT = /whisper|tts|guard|prompt-guard|distil|playai|orpheus|compound/i
+
+let modelsPromise: Promise<string[]> | null = null
+
+function getModels(): Promise<string[]> {
+  if (process.env.GROQ_MODELS) {
+    return Promise.resolve(process.env.GROQ_MODELS.split(",").map(m => m.trim()).filter(Boolean))
+  }
+  modelsPromise ??= (async () => {
+    try {
+      const list = await groq.models.list()
+      const models = list.data
+        .map((m: any) => m.id as string)
+        .filter(id => !LIVE_SEARCH_MODELS.has(id) && !NON_CHAT.test(id))
+        .sort()
+      console.log(`llm: crawler models: ${models.join(", ") || "(none)"}`)
+      return models
+    } catch (e) {
+      console.log(`llm: could not list models: ${e}`)
+      return []
+    }
+  })()
+  return modelsPromise
+}
 
 // Model → time it can be tried again. Per serverless instance, which is enough to avoid
 // re-hitting an exhausted model on every request.
@@ -24,7 +45,7 @@ function retryAfterMs(message: string): number {
 
 // Returns the first model's answer, or null if every model failed.
 export async function complete(prompt: string, timeoutMs: number = 15000): Promise<string | null> {
-  for (const model of MODELS) {
+  for (const model of await getModels()) {
     if ((blockedUntil.get(model) || 0) > Date.now()) continue
     try {
       const completion = await groq.chat.completions.create({
@@ -39,7 +60,7 @@ export async function complete(prompt: string, timeoutMs: number = 15000): Promi
       const message = String(e?.message || e)
       if (status === 429) blockedUntil.set(model, Date.now() + retryAfterMs(message))
       else if (status === 400 || status === 403 || status === 404) blockedUntil.set(model, Date.now() + 60 * 60000)
-      console.error(`llm: ${model} failed (${status ?? "no status"}): ${message.slice(0, 200)}`)
+      console.log(`llm: ${model} failed (${status ?? "no status"}): ${message.slice(0, 200)}`)
     }
   }
   return null
