@@ -1,10 +1,7 @@
-import Groq from "groq-sdk"
+import { complete } from "./llm"
 
 const SUPABASE_URL = "https://bcmwypjrahtxogytsvuc.supabase.co"
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY!
-const GROQ_API_KEY = process.env.GROQ_API_KEY!
-
-const groq = new Groq({ apiKey: GROQ_API_KEY })
 
 async function getPopularDomains(): Promise<string[]> {
   const since = new Date(Date.now() - 7 * 86400000).toISOString()
@@ -49,23 +46,18 @@ async function recrawlSite(domain: string): Promise<void> {
   const content = await scrapeWithJina(domain)
   if (!content) { console.log(`blocked: ${domain}`); return }
 
-  const completion = await groq.chat.completions.create({
-    model: "openai/gpt-oss-20b",
-    messages: [{
-      role: "user",
-      content: `Convert to LAWP JSON:\n\nDomain: ${domain}\nContent: ${content}\n\nReturn ONLY: {"domain":"${domain}","name":"Name","pages":{"/":{"title":"T","content":"C"}},"actions":[{"id":"i","name":"N","description":"D","intent":["k1","k2","k3"],"input":{"type":"text","required":false}}]}`
-    }],
-    temperature: 0.1
-  })
+  const raw = await complete(`Convert to LAWP JSON:\n\nDomain: ${domain}\nContent: ${content}\n\nReturn ONLY: {"domain":"${domain}","name":"Name","pages":{"/":{"title":"T","content":"C"}},"actions":[{"id":"i","name":"N","description":"D","intent":["k1","k2","k3"],"input":{"type":"text","required":false}}]}`)
+  if (!raw) { console.log(`no model available, kept existing LAWP: ${domain}`); return }
 
-  const raw = completion.choices?.[0]?.message?.content
-  if (!raw) return
-
-  let lawp
+  let lawp: any = null
   try { lawp = JSON.parse(raw) } catch {
     const match = raw.match(/\{[\s\S]*\}/)
-    if (!match) return
-    lawp = JSON.parse(match[0])
+    if (match) { try { lawp = JSON.parse(match[0]) } catch {} }
+  }
+  // Never overwrite a good LAWP with a malformed one.
+  if (!lawp?.pages || typeof lawp.pages !== "object" || Object.keys(lawp.pages).length === 0) {
+    console.log(`bad LAWP, kept existing: ${domain}`)
+    return
   }
 
   await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?domain=eq.${domain}`, {
@@ -86,8 +78,8 @@ async function main() {
 
   for (const domain of popular) {
     const stale = await needsRecrawl(domain)
-    if (stale) await recrawlSite(domain)
-    else console.log(`fresh: ${domain}`)
+    if (!stale) { console.log(`fresh: ${domain}`); continue }
+    try { await recrawlSite(domain) } catch (e) { console.log(`error: ${domain}: ${e}`) }
   }
   console.log("Done")
 }

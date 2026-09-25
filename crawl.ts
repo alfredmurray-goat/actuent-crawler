@@ -1,10 +1,9 @@
-import Groq from "groq-sdk"
+import { complete } from "./llm"
 import fs from "fs"
 import readline from "readline"
 
 const SUPABASE_URL = "https://bcmwypjrahtxogytsvuc.supabase.co"
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY!
-const GROQ_API_KEY = process.env.GROQ_API_KEY!
 const CONCURRENCY = parseInt(process.env.CONCURRENCY || "5")
 // Max NEW sites per run. Already-indexed domains don't count towards this.
 const CRAWL_LIMIT = parseInt(process.env.CRAWL_LIMIT || "100000")
@@ -17,9 +16,7 @@ const SKIP = new Set(["google.com","youtube.com","facebook.com","twitter.com","i
 const SKIP_TLDS = [".tk",".ml",".ga",".cf",".gq",".xxx"]
 
 if (!SUPABASE_SERVICE_KEY) { console.error("Missing SUPABASE_SERVICE_KEY"); process.exit(1) }
-if (!GROQ_API_KEY) { console.error("Missing GROQ_API_KEY"); process.exit(1) }
-
-const groq = new Groq({ apiKey: GROQ_API_KEY })
+if (!process.env.GROQ_API_KEY) { console.error("Missing GROQ_API_KEY"); process.exit(1) }
 
 async function loadCSV(path: string): Promise<string[]> {
   const domains: string[] = []
@@ -111,23 +108,21 @@ function minimal(domain: string, content: string = ""): any {
 }
 
 async function toLAWP(domain: string, content: string): Promise<any> {
-  try {
-    const c = await groq.chat.completions.create({
-      model: "openai/gpt-oss-20b",
-      messages: [{
-        role: "user",
-        content: `Convert to LAWP JSON.\n\nDomain: ${domain}\nContent: ${content}\n\nReturn ONLY valid JSON:\n{"domain":"${domain}","name":"Name","pages":{"/":{"title":"T","content":"Summary under 100 words"}},"actions":[{"id":"id","name":"N","description":"D","intent":["k1","k2","k3"],"input":{"type":"text","required":false}}]}\n\nInclude 2-4 real actions only.`
-      }],
-      temperature: 0.1
-    })
-    const raw = c.choices?.[0]?.message?.content
-    if (!raw) return minimal(domain, content)
-    try { return JSON.parse(raw) } catch {
-      const m = raw.match(/\{[\s\S]*\}/)
-      if (!m) return minimal(domain, content)
-      try { return JSON.parse(m[0]) } catch { return minimal(domain, content) }
-    }
-  } catch { return minimal(domain, content) }
+  const raw = await complete(`Convert to LAWP JSON.\n\nDomain: ${domain}\nContent: ${content}\n\nReturn ONLY valid JSON:\n{"domain":"${domain}","name":"Name","pages":{"/":{"title":"T","content":"Summary under 100 words"}},"actions":[{"id":"id","name":"N","description":"D","intent":["k1","k2","k3"],"input":{"type":"text","required":false}}]}\n\nInclude 2-4 real actions only.`)
+  if (!raw) return minimal(domain, content)
+  let parsed: any = null
+  try { parsed = JSON.parse(raw) } catch {
+    const m = raw.match(/\{[\s\S]*\}/)
+    if (m) { try { parsed = JSON.parse(m[0]) } catch {} }
+  }
+  const pages = parsed?.pages
+  if (!pages || typeof pages !== "object" || Array.isArray(pages) || Object.keys(pages).length === 0) return minimal(domain, content)
+  return {
+    domain,
+    name: typeof parsed.name === "string" && parsed.name ? parsed.name : minimal(domain).name,
+    pages,
+    actions: Array.isArray(parsed.actions) ? parsed.actions : []
+  }
 }
 
 async function saveSite(site: any): Promise<void> {
