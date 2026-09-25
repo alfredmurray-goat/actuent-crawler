@@ -43,28 +43,41 @@ function retryAfterMs(message: string): number {
   return ((Number(h) || 0) * 3600 + (Number(m) || 0) * 60 + (Number(s) || 0)) * 1000 || 5 * 60000
 }
 
-// Returns the first model's answer, or null if every model failed.
+// Waits out short per-minute cooldowns (up to this long) instead of failing, so bulk jobs
+// automatically pace themselves to Groq's free-tier rate limits.
+const MAX_WAIT_MS = 90_000
+
+// Returns the first model's answer, or null if every model failed or is blocked for longer.
 export async function complete(prompt: string, timeoutMs: number = 15000): Promise<string | null> {
-  for (const model of await getModels()) {
-    if ((blockedUntil.get(model) || 0) > Date.now()) continue
-    try {
-      const completion = await groq.chat.completions.create({
-        model,
-        messages: [{ role: "user", content: prompt }],
-        temperature: 0.1,
-        // Groq counts max tokens against the per-minute limit; the huge defaults of reasoning
-        // models make every request "too large".
-        max_tokens: 2000
-      }, { timeout: timeoutMs, maxRetries: 0 })
-      const text = completion.choices?.[0]?.message?.content
-      if (text) return text.replace(/<think>[\s\S]*?<\/think>/g, "").trim()
-    } catch (e: any) {
-      const status = e?.status
-      const message = String(e?.message || e)
-      if (status === 429) blockedUntil.set(model, Date.now() + retryAfterMs(message))
-      else if (status === 400 || status === 403 || status === 404) blockedUntil.set(model, Date.now() + 60 * 60000)
-      console.log(`llm: ${model} failed (${status ?? "no status"}): ${message.slice(0, 200)}`)
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const models = await getModels()
+    for (const model of models) {
+      if ((blockedUntil.get(model) || 0) > Date.now()) continue
+      try {
+        const completion = await groq.chat.completions.create({
+          model,
+          messages: [{ role: "user", content: prompt }],
+          temperature: 0.1,
+          // Groq counts max tokens against per-minute limits (qwen's output limit is only
+          // 1000/min), so keep it just above what a LAWP document needs.
+          max_tokens: 900,
+          // Qwen 3 "thinks" by default, which would use up the output budget.
+          ...(model.startsWith("qwen/") ? { reasoning_effort: "none" } : {})
+        } as any, { timeout: timeoutMs, maxRetries: 0 }) as any
+        const text = completion.choices?.[0]?.message?.content
+        if (text) return text.replace(/<think>[\s\S]*?<\/think>/g, "").trim()
+      } catch (e: any) {
+        const status = e?.status
+        const message = String(e?.message || e)
+        if (status === 429) blockedUntil.set(model, Date.now() + retryAfterMs(message))
+        else if (status === 400 || status === 403 || status === 404) blockedUntil.set(model, Date.now() + 60 * 60000)
+        console.log(`llm: ${model} failed (${status ?? "no status"}): ${message.slice(0, 160)}`)
+      }
     }
+    const nextFree = Math.min(...models.map(m => blockedUntil.get(m) || 0))
+    const wait = nextFree - Date.now()
+    if (!models.length || wait <= 0 || wait > MAX_WAIT_MS) return null
+    await new Promise(r => setTimeout(r, wait + 500))
   }
   return null
 }
