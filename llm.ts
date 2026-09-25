@@ -8,9 +8,12 @@ const groq = new Groq({ apiKey: process.env.GROQ_API_KEY || "unset" })
 //      (actuent-public) so bulk crawling can't use up its quota. Override with GROQ_MODELS="a,b".
 //   2. Google Gemini (free, no card) when GEMINI_API_KEY is set.   Model: GEMINI_MODEL
 //   3. Mistral (free Experiment plan) when MISTRAL_API_KEY is set. Model: MISTRAL_MODEL
+//   4. Cloudflare Workers AI (free daily allowance) when CLOUDFLARE_ACCOUNT_ID + CLOUDFLARE_AI_TOKEN are set
+//   5. Cohere (free trial key) when COHERE_API_KEY is set. Model: COHERE_MODEL
+//   6. Hugging Face Inference (free monthly credits) when HF_TOKEN is set. Model: HF_MODEL
 // Each target has its own cooldown after a rate limit.
 
-type Target = { id: string, provider: "groq" | "openai-compatible", model: string, baseURL?: string, apiKey?: string }
+type Target = { id: string, provider: "groq" | "openai-compatible", model: string, baseURL?: string, apiKey?: string, jsonMode?: boolean }
 
 const LIVE_SEARCH_MODELS = new Set(["openai/gpt-oss-20b", "openai/gpt-oss-120b", "llama-3.3-70b-versatile"])
 const NON_CHAT = /whisper|tts|guard|prompt-guard|distil|playai|orpheus|compound/i
@@ -47,6 +50,18 @@ function getTargets(): Promise<Target[]> {
     if (process.env.MISTRAL_API_KEY) targets.push({
       id: "mistral", provider: "openai-compatible", model: process.env.MISTRAL_MODEL || "mistral-small-latest",
       baseURL: "https://api.mistral.ai/v1", apiKey: process.env.MISTRAL_API_KEY
+    })
+    if (process.env.CLOUDFLARE_ACCOUNT_ID && process.env.CLOUDFLARE_AI_TOKEN) targets.push({
+      id: "cloudflare", provider: "openai-compatible", model: process.env.CLOUDFLARE_AI_MODEL || "@cf/meta/llama-3.1-8b-instruct",
+      baseURL: `https://api.cloudflare.com/client/v4/accounts/${process.env.CLOUDFLARE_ACCOUNT_ID}/ai/v1`, apiKey: process.env.CLOUDFLARE_AI_TOKEN, jsonMode: false
+    })
+    if (process.env.COHERE_API_KEY) targets.push({
+      id: "cohere", provider: "openai-compatible", model: process.env.COHERE_MODEL || "command-r7b-12-2024",
+      baseURL: "https://api.cohere.ai/compatibility/v1", apiKey: process.env.COHERE_API_KEY, jsonMode: false
+    })
+    if (process.env.HF_TOKEN) targets.push({
+      id: "huggingface", provider: "openai-compatible", model: process.env.HF_MODEL || "meta-llama/Llama-3.1-8B-Instruct",
+      baseURL: "https://router.huggingface.co/v1", apiKey: process.env.HF_TOKEN, jsonMode: false
     })
     console.log(`llm: crawler models: ${targets.map(t => t.id).join(", ") || "(none)"}`)
     return targets
@@ -90,7 +105,8 @@ async function call(target: Target, prompt: string, timeoutMs: number): Promise<
   const res = await fetch(`${target.baseURL}/chat/completions`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "Authorization": `Bearer ${target.apiKey}` },
-    body: JSON.stringify({ model: target.model, messages, temperature: 0.1, max_tokens: MAX_TOKENS, response_format: { type: "json_object" } }),
+    // JSON mode where the provider supports it; the prompt asks for JSON either way.
+    body: JSON.stringify({ model: target.model, messages, temperature: 0.1, max_tokens: MAX_TOKENS, ...(target.jsonMode === false ? {} : { response_format: { type: "json_object" } }) }),
     signal: AbortSignal.timeout(timeoutMs)
   })
   if (!res.ok) throw new LLMError(res.status, (await res.text()).slice(0, 300), res.headers.get("retry-after"))

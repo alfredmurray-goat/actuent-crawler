@@ -2,12 +2,15 @@ import fs from "fs"
 import readline from "readline"
 import { SUPABASE_URL, SUPABASE_HEADERS, robotsAllows } from "./shared"
 import { USER_AGENT } from "./robots"
+import { sitemapPaths } from "./sitemap"
 
-// Indexes key subpages (/pricing, /about, /contact) of the most popular indexed sites, in Tranco
-// order. No LLM: the page text is summarised directly, so it never competes for Groq quota.
+// Indexes the most useful subpages of popular indexed sites, in Tranco order. Pages are found from
+// the site's sitemap (robots.txt "Sitemap:" lines or /sitemap.xml) and ranked by how useful they
+// are to agents; sites without a sitemap fall back to /pricing, /about and /contact. No LLM, so it
+// never competes for LLM quota. Only English sites for now (LAWP text must be English).
 // Sites are marked with subpages_crawled_at so each is done once.
 
-const PATHS = ["/pricing", "/about", "/contact"]
+const FALLBACK_PATHS = ["/pricing", "/about", "/contact"]
 const TOP = parseInt(process.env.SUBPAGE_TOP || "20000")
 const TIME_BUDGET_MS = parseInt(process.env.TIME_BUDGET_MIN || "120") * 60000
 const CONCURRENCY = 5
@@ -68,7 +71,7 @@ async function fetchPage(domain: string, path: string): Promise<{ title: string,
 
 async function candidates(domains: string[]): Promise<any[]> {
   const list = encodeURIComponent(domains.map(d => `"${d}"`).join(","))
-  const r = await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?select=domain,pages&domain=in.(${list})&subpages_crawled_at=is.null&owner_key=is.null&actions=neq.%5B%5D`, { headers: SUPABASE_HEADERS })
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?select=domain,pages,language&domain=in.(${list})&subpages_crawled_at=is.null&owner_key=is.null&actions=neq.%5B%5D`, { headers: SUPABASE_HEADERS })
   if (!r.ok) throw new Error(`Could not load sites: ${r.status} ${await r.text()}`)
   return r.json()
 }
@@ -76,7 +79,16 @@ async function candidates(domains: string[]): Promise<any[]> {
 async function processSite(site: any): Promise<number> {
   const pages = { ...(site.pages || {}) }
   let found = 0
-  for (const path of PATHS) {
+  // LAWP text is English: skip subpages of non-English sites until they can be translated.
+  if (site.language && site.language !== "en") {
+    await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?domain=eq.${encodeURIComponent(site.domain)}`, {
+      method: "PATCH", headers: { ...SUPABASE_HEADERS, "Content-Type": "application/json" }, body: JSON.stringify({ subpages_crawled_at: new Date().toISOString() })
+    })
+    return 0
+  }
+  const discovered = await sitemapPaths(site.domain)
+  const paths = discovered.length ? discovered : FALLBACK_PATHS
+  for (const path of paths) {
     if (pages[path] || !await robotsAllows(site.domain, path)) continue
     const page = await fetchPage(site.domain, path)
     if (!page) continue

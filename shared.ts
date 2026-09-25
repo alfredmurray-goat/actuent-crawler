@@ -135,7 +135,9 @@ export async function saveSite(site: any, hash?: string, conversion?: "native" |
   const base = { domain: site.domain, name: site.name, pages: site.pages, actions: site.actions, updated_at: new Date().toISOString() }
   const lang = site.language ? { language: site.language } : {}
   // Newest schema first; older databases lack native (lawp_actions.sql) or content_hash (groq_quota.sql).
+  const extras = { ...(site.business ? { business: site.business } : {}) }
   const attempts = [
+    { ...base, ...lang, native: !!site.native, ...(hash ? { content_hash: hash } : {}), ...(conversion ? { conversion } : {}), ...extras },
     { ...base, ...lang, native: !!site.native, ...(hash ? { content_hash: hash } : {}), ...(conversion ? { conversion } : {}) },
     { ...base, ...lang, native: !!site.native, ...(hash ? { content_hash: hash } : {}) },
     { ...base, native: !!site.native },

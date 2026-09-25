@@ -1,5 +1,6 @@
 import { SUPABASE_URL, SUPABASE_SERVICE_KEY, fetchNative, fetchSite, minimal, toLAWP, saveSite, contentHash, robotsAllows } from "./shared"
 import { heuristicLAWP, INFRASTRUCTURE } from "./heuristic"
+import { extractBusiness } from "./business"
 import fs from "fs"
 import readline from "readline"
 
@@ -17,7 +18,7 @@ const SKIP = new Set(["google.com","youtube.com","facebook.com","twitter.com","i
 const SKIP_TLDS = [".tk",".ml",".ga",".cf",".gq",".xxx"]
 
 if (!SUPABASE_SERVICE_KEY) { console.error("Missing SUPABASE_SERVICE_KEY"); process.exit(1) }
-if (!process.env.GROQ_API_KEY && !process.env.GEMINI_API_KEY && !process.env.MISTRAL_API_KEY) { console.error("Missing an LLM key (GROQ_API_KEY, GEMINI_API_KEY or MISTRAL_API_KEY)"); process.exit(1) }
+if (!process.env.GROQ_API_KEY) console.log("No GROQ_API_KEY — using other LLM providers or the rule-based converter")
 
 async function loadCSV(path: string): Promise<string[]> {
   const domains: string[] = []
@@ -109,6 +110,8 @@ async function crawlOne(domain: string, label: string): Promise<Outcome> {
       }
     }
 
+    // Address, phone and opening hours from the site's schema.org data.
+    if (page?.isHtml && !lawp.business) { const business = extractBusiness(page.raw); if (business) lawp.business = business }
     await saveSite(lawp, page ? contentHash(page.text) : undefined, conversion)
     const full = conversion !== "minimal"
     console.log(`${label} SAVED (${conversion}) ${domain}`)

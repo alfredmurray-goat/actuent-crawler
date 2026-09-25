@@ -77,14 +77,32 @@ export async function fetchProducts(domain: string): Promise<Item[]> {
   return items.filter(i => i.name && i.url)
 }
 
+// Saves a shop's products. Price changes keep the previous price on the item and are logged in
+// lawp_item_prices, so agents can say "this dropped 20% this week".
 export async function saveProducts(domain: string, items: Item[]): Promise<void> {
+  const upsert = (rows: object[]) => fetch(`${SUPABASE_URL}/rest/v1/lawp_items?on_conflict=url`, {
+    method: "POST", headers: { ...HEADERS, "Prefer": "resolution=merge-duplicates" }, body: JSON.stringify(rows)
+  })
   try {
     if (items.length) {
-      await fetch(`${SUPABASE_URL}/rest/v1/lawp_items?on_conflict=url`, {
-        method: "POST",
-        headers: { ...HEADERS, "Prefer": "resolution=merge-duplicates" },
-        body: JSON.stringify(items.map(i => ({ ...i, updated_at: new Date().toISOString() })))
-      })
+      const now = new Date().toISOString()
+      const before = await fetch(`${SUPABASE_URL}/rest/v1/lawp_items?select=url,price_eur&domain=eq.${encodeURIComponent(domain)}&limit=1000`, { headers: HEADERS })
+        .then(r => r.ok ? r.json() : []).catch(() => [])
+      const previous = new Map<string, number | null>((Array.isArray(before) ? before : []).map((r: any) => [r.url, r.price_eur == null ? null : Number(r.price_eur)]))
+      const changed = items.filter(i => previous.has(i.url) && i.price_eur != null && previous.get(i.url) != null && Math.abs(previous.get(i.url)! - i.price_eur) >= 0.01)
+      const changedUrls = new Set(changed.map(i => i.url))
+      const rest = items.filter(i => !changedUrls.has(i.url)).map(i => ({ ...i, updated_at: now }))
+      // PostgREST needs the same columns in every row of a batch, so changed items go separately.
+      if (rest.length) await upsert(rest)
+      if (changed.length) {
+        const res = await upsert(changed.map(i => ({ ...i, updated_at: now, previous_price_eur: previous.get(i.url), price_changed_at: now })))
+        if (!res.ok) await upsert(changed.map(i => ({ ...i, updated_at: now }))) // before round_three.sql
+      }
+      const history = [...changed, ...items.filter(i => !previous.has(i.url))]
+        .filter(i => i.price != null).map(i => ({ url: i.url, price: i.price, currency: i.currency, price_eur: i.price_eur, observed_at: now }))
+      if (history.length) {
+        await fetch(`${SUPABASE_URL}/rest/v1/lawp_item_prices`, { method: "POST", headers: HEADERS, body: JSON.stringify(history) }).catch(() => {})
+      }
     }
     await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?domain=eq.${encodeURIComponent(domain)}`, {
       method: "PATCH", headers: HEADERS, body: JSON.stringify({ products_crawled_at: new Date().toISOString() })
