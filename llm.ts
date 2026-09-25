@@ -51,7 +51,10 @@ export async function complete(prompt: string, timeoutMs: number = 15000): Promi
       const completion = await groq.chat.completions.create({
         model,
         messages: [{ role: "user", content: prompt }],
-        temperature: 0.1
+        temperature: 0.1,
+        // Groq counts max tokens against the per-minute limit; the huge defaults of reasoning
+        // models make every request "too large".
+        max_tokens: 2000
       }, { timeout: timeoutMs, maxRetries: 0 })
       const text = completion.choices?.[0]?.message?.content
       if (text) return text.replace(/<think>[\s\S]*?<\/think>/g, "").trim()
