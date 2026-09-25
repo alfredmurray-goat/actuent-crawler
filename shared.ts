@@ -83,7 +83,7 @@ export async function toLAWP(domain: string, content: string): Promise<any> {
 }
 
 export async function saveSite(site: any): Promise<void> {
-  const r = await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites`, {
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?on_conflict=domain`, {
     method: "POST",
     headers: {
       "apikey": SUPABASE_SERVICE_KEY,
@@ -95,7 +95,7 @@ export async function saveSite(site: any): Promise<void> {
   })
   if (!r.ok) {
     // Before lawp_actions.sql has run there's no `native` column; retry without it.
-    const retry = await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites`, {
+    const retry = await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?on_conflict=domain`, {
       method: "POST",
       headers: { ...SUPABASE_HEADERS, "Content-Type": "application/json", "Prefer": "resolution=merge-duplicates" },
       body: JSON.stringify({ domain: site.domain, name: site.name, pages: site.pages, actions: site.actions, updated_at: new Date().toISOString() })
