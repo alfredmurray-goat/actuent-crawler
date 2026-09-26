@@ -13,9 +13,10 @@ const USEFUL: { type: string, points: number, words: string[] }[] = [
   { type: "policies", points: 7, words: ["shipping", "delivery", "returns", "refunds", "refund", "warranty"] },
   { type: "about", points: 6, words: ["about", "company", "story", "team", "mission"] },
   { type: "help", points: 6, words: ["faq", "faqs", "help", "support", "features"] },
+  { type: "events", points: 5, words: ["events", "calendar", "concerts", "classes", "tickets", "programme", "program", "whatson"] },
   { type: "jobs", points: 3, words: ["careers", "jobs"] }
 ]
-const USELESS = /\/(tag|tags|category|author|page\/\d|wp-|cdn-cgi|search|login|signin|cart|checkout|account|privacy|cookie|terms|legal|feed|amp|blog|blogs|news|newsroom|press|changelog|releases|articles|stories|customers|case-studies|integrations|events|webinars|podcast|guides|gettingreal)(\/|$)|\.(pdf|jpg|jpeg|png|gif|xml|zip)$|\?|\/\d{4}\/\d{2}\//i
+const USELESS = /\/(tag|tags|category|author|page\/\d|wp-|cdn-cgi|search|login|signin|cart|checkout|account|privacy|cookie|terms|legal|feed|amp|blog|blogs|news|newsroom|press|changelog|releases|articles|stories|customers|case-studies|integrations|webinars|podcast|guides|gettingreal)(\/|$)|\.(pdf|jpg|jpeg|png|gif|xml|zip)$|\?|\/\d{4}\/\d{2}\//i
 async function getText(url: string, ms = 8000): Promise<string | null> {
   try {
     const r = await fetch(url, { headers: { "User-Agent": USER_AGENT }, signal: AbortSignal.timeout(ms) })

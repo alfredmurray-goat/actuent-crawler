@@ -1,6 +1,7 @@
 import fs from "fs"
 import readline from "readline"
-import { SUPABASE_URL, SUPABASE_HEADERS, robotsAllows } from "./shared"
+import { SUPABASE_URL, SUPABASE_HEADERS, robotsAllows, saveEvents } from "./shared"
+import { extractEvents } from "./business"
 import { USER_AGENT } from "./robots"
 import { sitemapPaths } from "./sitemap"
 
@@ -49,6 +50,7 @@ async function fetchPage(domain: string, path: string): Promise<{ title: string,
     if (res.ok && (res.headers.get("content-type") || "").includes("html")) {
       if (finalPath === "/") return null
       const html = await res.text()
+      await saveEvents(domain, extractEvents(html, res.url))
       const title = clean(html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] || "") || path.slice(1)
       const body = clean(html.match(/<body[\s\S]*<\/body>/i)?.[0] || html)
       return body.length >= 80 ? { title: title.slice(0, 120), content: body.slice(0, 700) } : null

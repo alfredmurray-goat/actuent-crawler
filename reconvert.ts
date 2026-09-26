@@ -1,6 +1,7 @@
-import { SUPABASE_URL, SUPABASE_HEADERS, fetchNative, fetchSite, toLAWP, saveSite, contentHash, robotsAllows } from "./shared"
-import { heuristicLAWP, INFRASTRUCTURE } from "./heuristic"
-import { extractBusiness } from "./business"
+import { SUPABASE_URL, SUPABASE_HEADERS, fetchNative, fetchSite, toLAWP, saveSite, saveEvents, contentHash, robotsAllows } from "./shared"
+import { heuristicLAWP, withBookingLinks, INFRASTRUCTURE } from "./heuristic"
+import { extractBusiness, extractEvents } from "./business"
+import { fetchLlmsTxt, withLlmsTxt, withLlmsTxtInput } from "./llmstxt"
 
 // Works through the conversion backlog, oldest first:
 //   • minimal entries ("Website at …") → LLM conversion, or the rule-based converter when no LLM
@@ -68,11 +69,14 @@ async function main() {
         const page = await fetchSite(domain)
         if (!page) { await touch(domain); tally.unchanged++; continue }
         const business = page.isHtml ? extractBusiness(page.raw) : null
+        if (page.isHtml) await saveEvents(domain, extractEvents(page.raw, `https://${domain}/`))
+        const llms = await fetchLlmsTxt(domain)
 
         if (llmFailures < LLM_GIVE_UP_AFTER) {
-          const lawp: any = await llm(domain, page.text)
+          const lawp: any = await llm(domain, withLlmsTxtInput(page.text, llms))
           if (Array.isArray(lawp.actions) && lawp.actions.length > 0) {
-            await saveSite(business ? { ...lawp, business } : lawp, contentHash(page.text), "llm")
+            const linked = withLlmsTxt(withBookingLinks(lawp, page.raw), domain, llms)
+            await saveSite(business ? { ...linked, business } : linked, contentHash(page.text), "llm")
             llmFailures = 0; tally.llm++
             console.log(`llm       ${domain}`)
             continue
@@ -83,7 +87,7 @@ async function main() {
         // Rule-based only improves minimal entries; rule-based ones wait for LLM quota.
         if (row.conversion !== "heuristic") {
           const rules = heuristicLAWP(domain, page.raw, page.isHtml)
-          if (rules) { await saveSite(business ? { ...rules, business } : rules, contentHash(page.text), "heuristic"); tally.heuristic++; console.log(`rules     ${domain}`); continue }
+          if (rules) { const full = withLlmsTxt(rules, domain, llms); await saveSite(business ? { ...full, business } : full, contentHash(page.text), "heuristic"); tally.heuristic++; console.log(`rules     ${domain}`); continue }
         }
         await touch(domain); tally.unchanged++
       } catch (e) {

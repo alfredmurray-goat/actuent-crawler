@@ -2,6 +2,7 @@ import fs from "fs"
 import readline from "readline"
 import { SUPABASE_URL, SUPABASE_HEADERS, robotsAllows } from "./shared"
 import { fetchProducts, saveProducts } from "./shop"
+import { checkWatches } from "./watches"
 
 // Indexes products with prices from shops among the top indexed sites (Tranco order): Shopify
 // (/products.json) and WooCommerce (Store API). No LLM. Shops are refreshed every 14 days.
@@ -32,11 +33,30 @@ async function due(domains: string[]): Promise<string[]> {
   return (await r.json()).map((row: any) => row.domain)
 }
 
+// Shops with watched products (price-drop alerts) are refreshed every day, before anything else.
+async function watchedDomains(): Promise<string[]> {
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/price_watches?select=domain&limit=5000`, { headers: SUPABASE_HEADERS })
+    return r.ok ? [...new Set<string>((await r.json()).map((w: any) => w.domain))] : []
+  } catch { return [] }
+}
+
 async function main() {
   const start = Date.now()
   const domains = await topDomains("./tranco_PY69J.csv")
+  let checked = 0, shops = 0, items = 0, alerts = 0
+
+  const watched = await watchedDomains()
+  if (watched.length) console.log(`Refreshing ${watched.length} shops with price watches`)
+  for (const domain of watched) {
+    try {
+      const found = await fetchProducts(domain)
+      if (found.length) { await saveProducts(domain, found); alerts += await checkWatches(domain, found) }
+    } catch (e) { console.log(`error ${domain}: ${e}`) }
+  }
+  if (watched.length) console.log(`${alerts} price-drop alerts sent`)
+
   console.log(`Checking the top ${domains.length} sites for shops`)
-  let checked = 0, shops = 0, items = 0
   for (let i = 0; i < domains.length && Date.now() - start < TIME_BUDGET_MS; i += CHUNK) {
     const todo = await due(domains.slice(i, i + CHUNK))
     let index = 0

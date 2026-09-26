@@ -13,6 +13,8 @@ const HEADERS = { "apikey": SUPABASE_SERVICE_KEY, "Authorization": `Bearer ${SUP
 export type Item = {
   domain: string, url: string, name: string, price: number | null, currency: string | null,
   price_eur: number | null, image: string | null, available: boolean | null, source: string
+  // Barcode (GTIN/EAN/UPC) when the shop publishes one: matches the same product across shops.
+  gtin?: string | null
 }
 
 async function getJson(url: string, timeoutMs = 6000): Promise<any | null> {
@@ -51,6 +53,7 @@ async function shopifyItems(domain: string): Promise<Item[] | null> {
       price: Number.isFinite(price) ? price : null, currency, price_eur: null,
       image: p.images?.[0]?.src || null,
       available: (p.variants || []).some((v: any) => v.available !== false),
+      gtin: /^\d{8,14}$/.test(String(variant.barcode || "").trim()) ? String(variant.barcode).trim() : null,
       source: "shopify"
     }
   })
@@ -65,7 +68,8 @@ async function wooItems(domain: string): Promise<Item[] | null> {
     return {
       domain, url: p.permalink, name: String(p.name || "").replace(/<[^>]+>/g, "").slice(0, 200),
       price: Number.isFinite(raw) ? raw : null, currency: p.prices?.currency_code || null, price_eur: null,
-      image: p.images?.[0]?.src || null, available: p.is_in_stock !== false, source: "woocommerce"
+      image: p.images?.[0]?.src || null, available: p.is_in_stock !== false, source: "woocommerce",
+      gtin: /^\d{8,14}$/.test(String(p.sku || "").trim()) ? String(p.sku).trim() : null
     }
   }).filter((i: Item) => i.url)
 }
@@ -80,9 +84,14 @@ export async function fetchProducts(domain: string): Promise<Item[]> {
 // Saves a shop's products. Price changes keep the previous price on the item and are logged in
 // lawp_item_prices, so agents can say "this dropped 20% this week".
 export async function saveProducts(domain: string, items: Item[]): Promise<void> {
-  const upsert = (rows: object[]) => fetch(`${SUPABASE_URL}/rest/v1/lawp_items?on_conflict=url`, {
+  const send = (rows: object[]) => fetch(`${SUPABASE_URL}/rest/v1/lawp_items?on_conflict=url`, {
     method: "POST", headers: { ...HEADERS, "Prefer": "resolution=merge-duplicates" }, body: JSON.stringify(rows)
   })
+  // Before the gtin column exists (next_list.sql), save without it.
+  const upsert = async (rows: object[]) => {
+    const res = await send(rows)
+    return res.ok ? res : send(rows.map(({ gtin, ...rest }: any) => rest))
+  }
   try {
     if (items.length) {
       const now = new Date().toISOString()

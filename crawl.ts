@@ -1,6 +1,7 @@
-import { SUPABASE_URL, SUPABASE_SERVICE_KEY, fetchNative, fetchSite, minimal, toLAWP, saveSite, contentHash, robotsAllows } from "./shared"
-import { heuristicLAWP, INFRASTRUCTURE } from "./heuristic"
-import { extractBusiness } from "./business"
+import { SUPABASE_URL, SUPABASE_SERVICE_KEY, fetchNative, fetchSite, minimal, toLAWP, saveSite, saveEvents, contentHash, robotsAllows } from "./shared"
+import { heuristicLAWP, withBookingLinks, INFRASTRUCTURE } from "./heuristic"
+import { extractBusiness, extractEvents } from "./business"
+import { fetchLlmsTxt, withLlmsTxt, withLlmsTxtInput } from "./llmstxt"
 import fs from "fs"
 import readline from "readline"
 
@@ -92,7 +93,7 @@ async function crawlOne(domain: string, label: string): Promise<Outcome> {
     }
     const page = native ? null : await fetchSite(domain)
 
-    let lawp: any
+    let lawp: any, llms: string | null = null
     let conversion: "native" | "llm" | "heuristic" | "minimal"
     if (native) {
       console.log(`${label} native LAWP ${domain}`)
@@ -101,7 +102,8 @@ async function crawlOne(domain: string, label: string): Promise<Outcome> {
       console.log(`${label} blocked — saving minimal ${domain}`)
       lawp = minimal(domain); conversion = "minimal"
     } else {
-      lawp = await toLAWP(domain, page.text)
+      llms = await fetchLlmsTxt(domain)
+      lawp = await toLAWP(domain, withLlmsTxtInput(page.text, llms))
       conversion = "llm"
       // No LLM available (or unusable output): build it from the page itself instead.
       if (!Array.isArray(lawp.actions) || lawp.actions.length === 0) {
@@ -110,9 +112,13 @@ async function crawlOne(domain: string, label: string): Promise<Outcome> {
       }
     }
 
+    if (conversion === "llm" || conversion === "heuristic") lawp = withLlmsTxt(lawp, domain, llms)
+    // Direct links to booking/ordering systems (OpenTable, Calendly, Wolt…) found on the page.
+    if (page && conversion === "llm") lawp = withBookingLinks(lawp, page.raw)
     // Address, phone and opening hours from the site's schema.org data.
     if (page?.isHtml && !lawp.business) { const business = extractBusiness(page.raw); if (business) lawp.business = business }
     await saveSite(lawp, page ? contentHash(page.text) : undefined, conversion)
+    if (page?.isHtml) await saveEvents(domain, extractEvents(page.raw, `https://${domain}/`))
     const full = conversion !== "minimal"
     console.log(`${label} SAVED (${conversion}) ${domain}`)
     await new Promise(r => setTimeout(r, 300))
