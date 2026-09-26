@@ -16,6 +16,7 @@ jobs:
       - run: npx tsx recrawl_popular.ts
         env:
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          TIME_BUDGET_MIN: '50'
           JINA_API_KEY: ${{ secrets.JINA_API_KEY }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}

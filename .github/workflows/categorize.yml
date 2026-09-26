@@ -1,0 +1,21 @@
+name: Categorize Sites
+on:
+  schedule:
+    - cron: '30 5 * * *'
+  workflow_dispatch:
+concurrency:
+  group: categorize
+  cancel-in-progress: false
+jobs:
+  categorize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm install
+      - run: npx tsx categorize.ts
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}

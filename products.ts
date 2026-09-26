@@ -54,7 +54,7 @@ async function main() {
       if (found.length) { await saveProducts(domain, found); alerts += await checkWatches(domain, found) }
     } catch (e) { console.log(`error ${domain}: ${e}`) }
   }
-  if (watched.length) console.log(`${alerts} price-drop alerts sent`)
+  if (watched.length) console.log(`${alerts} alerts sent`)
 
   console.log(`Checking the top ${domains.length} sites for shops`)
   for (let i = 0; i < domains.length && Date.now() - start < TIME_BUDGET_MS; i += CHUNK) {

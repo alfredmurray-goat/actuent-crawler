@@ -2,6 +2,8 @@ import crypto from "crypto"
 import { SUPABASE_URL, SUPABASE_HEADERS, SUPABASE_SERVICE_KEY } from "./shared"
 import { readiness } from "./score"
 import { sendEmail, esc, emailEnabled } from "./email"
+import { compare } from "./competitors"
+import { CATEGORIES } from "./category"
 
 // Weekly email to the owner of every claimed site: its agent-readiness score, how it changed,
 // AI bot visits this week (when reported) and the single most valuable next step.
@@ -34,7 +36,7 @@ async function botVisits(domain: string): Promise<{ total: number, top: [string,
 async function main() {
   if (!emailEnabled) { console.log("RESEND_API_KEY isn't set — skipping score emails"); return }
   const sixDaysAgo = new Date(Date.now() - 6 * 86400000).toISOString()
-  const sites = await get(`lawp_sites?select=domain,name,pages,actions,native,business,owner_key,last_score&owner_key=not.is.null&score_emails=is.true&or=(score_emailed_at.is.null,score_emailed_at.lt.${encodeURIComponent(sixDaysAgo)})&limit=1000`)
+  const sites = await get(`lawp_sites?select=*&owner_key=not.is.null&score_emails=is.true&or=(score_emailed_at.is.null,score_emailed_at.lt.${encodeURIComponent(sixDaysAgo)})&limit=1000`)
   console.log(`${sites.length} claimed sites due a score email`)
   let sent = 0
   for (const site of sites) {
@@ -46,11 +48,13 @@ async function main() {
       const change = before == null ? "" : score > before ? ` (up from ${before})` : score < before ? ` (down from ${before})` : " (no change)"
       const next = checks.filter(c => !c.ok).sort((a, b) => b.points - a.points)[0]
       const bots = await botVisits(site.domain)
+      const vs = await compare(site, get).catch(() => null)
       const page = `https://api.actuent.ai/site/${site.domain}`
       const unsubscribe = `https://api.actuent.ai/api/unsubscribe?domain=${encodeURIComponent(site.domain)}&token=${unsubscribeToken(site.domain)}`
       const html = `<p>Hi,</p>
 <p><strong>${esc(site.name || site.domain)}</strong> is <strong>${score}/100</strong> agent-ready this week${esc(change)}: ${esc(label.toLowerCase())}.</p>
 ${bots ? `<p>AI bots visited ${bots.total} times in the last 7 days (${bots.top.map(([b, n]) => `${esc(b)} ${n}`).join(", ")}).</p>` : ""}
+${vs ? `<p>Among ${vs.total} similar sites (${esc(CATEGORIES[vs.category] || vs.category)}${vs.city ? ` in ${esc(vs.city)}` : ""}) you're <strong>#${vs.rank}</strong>.${vs.they_have[0] ? ` ${vs.they_have[0].count} of them have something you don't: ${esc(vs.they_have[0].label.toLowerCase())}.` : ""}</p>` : ""}
 ${next ? `<p><strong>Your next step (+${next.points} points):</strong> ${esc(next.label)}.<br>${next.fix}</p>` : `<p>Every check passes. Nice work.</p>`}
 <p><a href="${page}">See your full score and starter files →</a></p>
 <p style="color:#666;font-size:13px">Actuent, made by localilabs. You get this weekly because you claimed ${esc(site.domain)} on Actuent. <a href="${unsubscribe}">Unsubscribe</a></p>`

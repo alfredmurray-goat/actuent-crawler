@@ -1,0 +1,21 @@
+name: Flag Parked and Duplicate Sites
+on:
+  schedule:
+    - cron: '0 9 * * *'
+  workflow_dispatch:
+concurrency:
+  group: cleanup-sites
+  cancel-in-progress: false
+jobs:
+  flag:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm install
+      - run: npx tsx cleanup_sites.ts
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
