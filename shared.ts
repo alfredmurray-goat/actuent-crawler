@@ -4,6 +4,14 @@ import { USER_AGENT, robotsAllows } from "./robots"
 
 export { robotsAllows }
 
+// A malformed response from one site can trip an internal assertion in Node's built-in fetch
+// (undici) outside any try/catch. Log it and keep the job going instead of losing the whole run.
+process.on("uncaughtException", (e: any) => {
+  if (e?.code === "ERR_ASSERTION" && /undici/.test(String(e?.stack))) { console.log(`ignored fetch parser error: ${e.message}`); return }
+  console.error(e)
+  process.exit(1)
+})
+
 // Helpers shared by crawl.ts (mass crawl) and reconvert.ts (improving minimal entries).
 
 export const SUPABASE_URL = "https://bcmwypjrahtxogytsvuc.supabase.co"
