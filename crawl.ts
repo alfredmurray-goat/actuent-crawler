@@ -2,6 +2,7 @@ import { SUPABASE_URL, SUPABASE_SERVICE_KEY, fetchNative, fetchSite, minimal, to
 import { heuristicLAWP, withBookingLinks, INFRASTRUCTURE } from "./heuristic"
 import { extractBusiness, extractEvents } from "./business"
 import { fetchLlmsTxt, withLlmsTxt, withLlmsTxtInput } from "./llmstxt"
+import { rescue } from "./rescue"
 import fs from "fs"
 import readline from "readline"
 
@@ -99,8 +100,10 @@ async function crawlOne(domain: string, label: string): Promise<Outcome> {
       console.log(`${label} native LAWP ${domain}`)
       lawp = native; conversion = "native"
     } else if (!page) {
-      console.log(`${label} blocked — saving minimal ${domain}`)
-      lawp = minimal(domain); conversion = "minimal"
+      // Homepage blocked or down: try other addresses, llms.txt and the sitemap before giving up.
+      const saved = await rescue(domain, null, true)
+      if (saved) { lawp = saved.lawp; conversion = saved.conversion; console.log(`${label} rescued via ${saved.from} ${domain}`) }
+      else { console.log(`${label} blocked — saving minimal ${domain}`); lawp = minimal(domain); conversion = "minimal" }
     } else {
       llms = await fetchLlmsTxt(domain)
       lawp = await toLAWP(domain, withLlmsTxtInput(page.text, llms))
@@ -108,7 +111,14 @@ async function crawlOne(domain: string, label: string): Promise<Outcome> {
       // No LLM available (or unusable output): build it from the page itself instead.
       if (!Array.isArray(lawp.actions) || lawp.actions.length === 0) {
         const rules = heuristicLAWP(domain, page.raw, page.isHtml)
-        if (rules) { lawp = rules; conversion = "heuristic" } else { conversion = "minimal" }
+        if (rules) { lawp = rules; conversion = "heuristic" }
+        else {
+          // Rules found nothing on the raw page: try the rendered page, llms.txt and sitemap, as reconvert would.
+          // The LLM already had its turn on this page, so the rescue uses rules only.
+          const saved = await rescue(domain, page, false)
+          if (saved) { lawp = saved.lawp; conversion = saved.conversion; console.log(`${label} rescued via ${saved.from} ${domain}`) }
+          else conversion = "minimal"
+        }
       }
     }
 
