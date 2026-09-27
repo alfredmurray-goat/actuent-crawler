@@ -6,7 +6,7 @@ const groq = new Groq({ apiKey: process.env.GROQ_API_KEY || "unset" })
 // Free LLM quota is the crawler's bottleneck, so it spreads work over every free model it can:
 //   1. Groq: every chat model the key lists, except the ones reserved for live search
 //      (actuent-public) so bulk crawling can't use up its quota. Override with GROQ_MODELS="a,b".
-//   2. Google Gemini (free, no card) when GEMINI_API_KEY is set.   Model: GEMINI_MODEL
+//   2. Google Gemini (free, no card) when GEMINI_API_KEY is set.   Model: GEMINI_MODEL (flash-lite: the biggest free daily allowance)
 //   3. Mistral (free Experiment plan) when MISTRAL_API_KEY is set. Model: MISTRAL_MODEL
 //   4. Cloudflare Workers AI (free daily allowance) when CLOUDFLARE_ACCOUNT_ID + CLOUDFLARE_AI_TOKEN are set
 //   5. Cohere (free trial key) when COHERE_API_KEY is set. Model: COHERE_MODEL
@@ -21,7 +21,29 @@ const NON_CHAT = /whisper|tts|guard|prompt-guard|distil|playai|orpheus|compound/
 const UNRELIABLE_JSON = /allam/i
 
 const SYSTEM_PROMPT = "You convert website content into LAWP JSON. Reply with a single JSON object only, no prose."
-const MAX_TOKENS = 900
+const MAX_TOKENS = 700
+
+// Output-tokens-per-minute pacing. Groq counts a request's max_tokens against the per-minute output
+// limit up front ("Used 439, Requested 900" → 429), so instead of firing and failing, each target
+// remembers its limit (learnt from the first 429) and what it used in the last minute, and waits
+// until the next request fits.
+const otpmLimit = new Map<string, number>()
+const outputLog = new Map<string, { at: number, tokens: number }[]>()
+function recordOutput(id: string, tokens: number) {
+  const log = (outputLog.get(id) || []).filter(e => e.at > Date.now() - 60_000)
+  log.push({ at: Date.now(), tokens })
+  outputLog.set(id, log)
+}
+async function waitForRoom(id: string, maxTokens: number) {
+  const limit = otpmLimit.get(id)
+  if (!limit) return
+  for (let i = 0; i < 20; i++) {
+    const log = (outputLog.get(id) || []).filter(e => e.at > Date.now() - 60_000)
+    const used = log.reduce((n, e) => n + e.tokens, 0)
+    if (used + maxTokens <= limit || !log.length) return
+    await new Promise(r => setTimeout(r, Math.max(500, log[0].at + 60_000 - Date.now() + 200)))
+  }
+}
 
 let targetsPromise: Promise<Target[]> | null = null
 
@@ -44,7 +66,7 @@ function getTargets(): Promise<Target[]> {
   targetsPromise ??= (async () => {
     const targets: Target[] = (await groqModels()).map(model => ({ id: `groq:${model}`, provider: "groq" as const, model }))
     if (process.env.GEMINI_API_KEY) targets.push({
-      id: "gemini", provider: "openai-compatible", model: process.env.GEMINI_MODEL || "gemini-2.5-flash",
+      id: "gemini", provider: "openai-compatible", model: process.env.GEMINI_MODEL || "gemini-2.5-flash-lite",
       baseURL: "https://generativelanguage.googleapis.com/v1beta/openai", apiKey: process.env.GEMINI_API_KEY
     })
     if (process.env.MISTRAL_API_KEY) targets.push({
@@ -83,7 +105,7 @@ class LLMError extends Error {
   constructor(public status: number | undefined, message: string, public retryAfter?: string | null) { super(message) }
 }
 
-async function call(target: Target, prompt: string, timeoutMs: number): Promise<string | null> {
+async function call(target: Target, prompt: string, timeoutMs: number, maxTokens: number): Promise<string | null> {
   const messages = [{ role: "system", content: SYSTEM_PROMPT }, { role: "user", content: prompt }]
   if (target.provider === "groq") {
     try {
@@ -93,10 +115,11 @@ async function call(target: Target, prompt: string, timeoutMs: number): Promise<
         temperature: 0.1,
         response_format: { type: "json_object" },
         // Groq counts max tokens against per-minute limits (qwen's output limit is only 1000/min).
-        max_tokens: MAX_TOKENS,
+        max_tokens: maxTokens,
         // Qwen 3 "thinks" by default, which would use up the output budget.
         ...(target.model.startsWith("qwen/") ? { reasoning_effort: "none" } : {})
       } as any, { timeout: timeoutMs, maxRetries: 0 }) as any
+      recordOutput(target.id, completion.usage?.completion_tokens ?? maxTokens)
       return completion.choices?.[0]?.message?.content || null
     } catch (e: any) {
       throw new LLMError(e?.status, String(e?.message || e), e?.headers?.["retry-after"])
@@ -106,11 +129,12 @@ async function call(target: Target, prompt: string, timeoutMs: number): Promise<
     method: "POST",
     headers: { "Content-Type": "application/json", "Authorization": `Bearer ${target.apiKey}` },
     // JSON mode where the provider supports it; the prompt asks for JSON either way.
-    body: JSON.stringify({ model: target.model, messages, temperature: 0.1, max_tokens: MAX_TOKENS, ...(target.jsonMode === false ? {} : { response_format: { type: "json_object" } }) }),
+    body: JSON.stringify({ model: target.model, messages, temperature: 0.1, max_tokens: maxTokens, ...(target.jsonMode === false ? {} : { response_format: { type: "json_object" } }) }),
     signal: AbortSignal.timeout(timeoutMs)
   })
   if (!res.ok) throw new LLMError(res.status, (await res.text()).slice(0, 300), res.headers.get("retry-after"))
   const data = await res.json()
+  recordOutput(target.id, data.usage?.completion_tokens ?? maxTokens)
   return data.choices?.[0]?.message?.content || null
 }
 
@@ -119,13 +143,14 @@ async function call(target: Target, prompt: string, timeoutMs: number): Promise<
 const MAX_WAIT_MS = 90_000
 
 // Returns the first model's answer, or null if every model failed or is blocked for longer.
-export async function complete(prompt: string, timeoutMs: number = 15000): Promise<string | null> {
+export async function complete(prompt: string, timeoutMs: number = 15000, maxTokens: number = MAX_TOKENS): Promise<string | null> {
   for (let attempt = 0; attempt < 5; attempt++) {
     const targets = await getTargets()
     for (const target of targets) {
       if ((blockedUntil.get(target.id) || 0) > Date.now()) continue
       try {
-        const text = await call(target, prompt, timeoutMs)
+        await waitForRoom(target.id, maxTokens)
+        const text = await call(target, prompt, timeoutMs, maxTokens)
         if (text) return text.replace(/<think>[\s\S]*?<\/think>/g, "").trim()
         console.log(`llm: ${target.id} returned no content`)
       } catch (e: any) {
@@ -133,7 +158,10 @@ export async function complete(prompt: string, timeoutMs: number = 15000): Promi
         const message = String(e?.message || e)
         // Daily quotas (TPD/RPD) refill slowly on a rolling 24h window: don't wait on them, block the
         // model for a while so callers fall back (e.g. to the rule-based converter) straight away.
+        const perMinute = message.match(/per minute \((?:OTPM|TPM)\): Limit (\d+)/i)
+        if (perMinute) otpmLimit.set(target.id, Number(perMinute[1]))
         if (status === 429 && /per day|TPD|RPD/i.test(message)) blockedUntil.set(target.id, Date.now() + 15 * 60000)
+        else if (status === 429 && perMinute) { blockedUntil.set(target.id, Date.now() + retryAfterMs(message, e?.retryAfter)); continue } // paced from now on; not worth a log line
         else if (status === 429) blockedUntil.set(target.id, Date.now() + retryAfterMs(message, e?.retryAfter))
         else if (status === 400 || status === 401 || status === 403 || status === 404) blockedUntil.set(target.id, Date.now() + 60 * 60000)
         console.log(`llm: ${target.id} failed (${status ?? "no status"}): ${message.replace(/.*on_demand` on /, "").slice(0, 200)}`)

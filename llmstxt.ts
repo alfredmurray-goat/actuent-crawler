@@ -1,4 +1,5 @@
 import { USER_AGENT } from "./robots"
+import { fetchPublic } from "./safe-fetch"
 
 // llms.txt (https://llmstxt.org): a Markdown file some sites publish for AI, with a summary and a
 // list of their important pages ("- [Pricing](https://site.com/pricing): Plans and prices").
@@ -6,8 +7,8 @@ import { USER_AGENT } from "./robots"
 
 export async function fetchLlmsTxt(domain: string): Promise<string | null> {
   try {
-    const res = await fetch(`https://${domain}/llms.txt`, { headers: { "User-Agent": USER_AGENT }, redirect: "follow", signal: AbortSignal.timeout(6000) })
-    if (!res.ok) return null
+    const res = await fetchPublic(`https://${domain}/llms.txt`, { headers: { "User-Agent": USER_AGENT }, signal: AbortSignal.timeout(6000) })
+    if (!res?.ok) return null
     const type = res.headers.get("content-type") || ""
     if (/html|json/i.test(type)) return null
     const text = (await res.text()).slice(0, 100_000)

@@ -1,9 +1,9 @@
-import { SUPABASE_URL, SUPABASE_SERVICE_KEY, fetchNative, fetchSite, minimal, toLAWP, saveSite, saveEvents, contentHash, robotsAllows } from "./shared"
-import { heuristicLAWP, withBookingLinks, INFRASTRUCTURE } from "./heuristic"
-import { extractBusiness, extractEvents } from "./business"
-import { fetchLlmsTxt, withLlmsTxt, withLlmsTxtInput } from "./llmstxt"
-import { rescue } from "./rescue"
+import { SUPABASE_URL, SUPABASE_SERVICE_KEY, fetchNative, fetchSite, minimal, saveSite, saveEvents, contentHash, robotsAllows } from "./shared"
+import { INFRASTRUCTURE } from "./heuristic"
+import { extractEvents } from "./business"
+import { fetchLlmsTxt } from "./llmstxt"
 import { discoverLawp } from "./discover"
+import { convertSite, domainGone } from "./convert"
 import fs from "fs"
 import readline from "readline"
 
@@ -86,6 +86,24 @@ async function filterUncrawled(domains: string[]): Promise<string[]> {
 
 type Outcome = "full" | "minimal" | "skipped" | "error"
 
+// LLM calls go one at a time (llm.ts paces them to the per-minute limits); after a run of misses
+// the LLM is left alone for the rest of the run and sites are converted by rules.
+let llmMisses = 0
+const llmOn = () => llmMisses < 6
+let llmQueue: Promise<unknown> = Promise.resolve()
+function llm<T>(fn: () => Promise<T>): Promise<T | null> {
+  if (!llmOn()) return Promise.resolve(null)
+  const run = llmQueue.then(async () => {
+    if (!llmOn()) return null
+    const result = await fn()
+    if (result) llmMisses = 0
+    else if (++llmMisses === 6) console.log("LLM quota looks used up — rule-based conversion for the rest of the run")
+    return result
+  })
+  llmQueue = run.catch(() => {})
+  return run
+}
+
 async function crawlOne(domain: string, label: string): Promise<Outcome> {
   try {
     let native = await fetchNative(domain)
@@ -109,34 +127,20 @@ async function crawlOne(domain: string, label: string): Promise<Outcome> {
     if (native) {
       console.log(`${label} native LAWP ${domain}`)
       lawp = native; conversion = "native"
-    } else if (!page) {
-      // Homepage blocked or down: try other addresses, llms.txt and the sitemap before giving up.
-      const saved = await rescue(domain, null, true)
-      if (saved) { lawp = saved.lawp; conversion = saved.conversion; console.log(`${label} rescued via ${saved.from} ${domain}`) }
-      else { console.log(`${label} blocked — saving minimal ${domain}`); lawp = minimal(domain); conversion = "minimal" }
     } else {
-      llms = await fetchLlmsTxt(domain)
-      lawp = await toLAWP(domain, withLlmsTxtInput(page.text, llms))
-      conversion = "llm"
-      // No LLM available (or unusable output): build it from the page itself instead.
-      if (!Array.isArray(lawp.actions) || lawp.actions.length === 0) {
-        const rules = heuristicLAWP(domain, page.raw, page.isHtml)
-        if (rules) { lawp = rules; conversion = "heuristic" }
-        else {
-          // Rules found nothing on the raw page: try the rendered page, llms.txt and sitemap, as reconvert would.
-          // The LLM already had its turn on this page, so the rescue uses rules only.
-          const saved = await rescue(domain, page, false)
-          if (saved) { lawp = saved.lawp; conversion = saved.conversion; console.log(`${label} rescued via ${saved.from} ${domain}`) }
-          else conversion = "minimal"
-        }
+      // Rules first, then the LLM (hybrid, or full when rules find nothing), then rescue: convert.ts.
+      llms = page ? await fetchLlmsTxt(domain) : null
+      const result = await convertSite(domain, page, llms, llmOn() ? llm : null)
+      if (result) {
+        lawp = result.lawp; conversion = result.conversion
+        if (result.from !== "homepage") console.log(`${label} rescued via ${result.from} ${domain}`)
+      } else {
+        if (!page && await domainGone(domain)) { console.log(`${label} no such domain ${domain}`); return "skipped" }
+        console.log(`${label} nothing usable — saving minimal ${domain}`)
+        lawp = minimal(domain, page?.text || ""); conversion = "minimal"
       }
     }
 
-    if (conversion === "llm" || conversion === "heuristic") lawp = withLlmsTxt(lawp, domain, llms)
-    // Direct links to booking/ordering systems (OpenTable, Calendly, Wolt…) found on the page.
-    if (page && conversion === "llm") lawp = withBookingLinks(lawp, page.raw)
-    // Address, phone and opening hours from the site's schema.org data.
-    if (page?.isHtml && !lawp.business) { const business = extractBusiness(page.raw); if (business) lawp.business = business }
     await saveSite(lawp, page ? contentHash(page.text) : undefined, conversion)
     if (page?.isHtml) await saveEvents(domain, extractEvents(page.raw, `https://${domain}/`))
     const full = conversion !== "minimal"
@@ -168,7 +172,7 @@ const RECRAWL_CUTOFF = process.env.RECRAWL_CUTOFF || "2026-09-26T12:00:00Z"
 
 async function backlogRemaining(): Promise<number | null> {
   try {
-    const r = await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?select=domain&actions=eq.%5B%5D&owner_key=is.null&updated_at=lt.${encodeURIComponent(RECRAWL_CUTOFF)}`, {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?select=domain&actions=eq.%5B%5D&owner_key=is.null&status=is.null&updated_at=lt.${encodeURIComponent(RECRAWL_CUTOFF)}`, {
       method: "HEAD",
       headers: { "apikey": SUPABASE_SERVICE_KEY, "Authorization": `Bearer ${SUPABASE_SERVICE_KEY}`, "Prefer": "count=exact", "Range": "0-0" }
     })

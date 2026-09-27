@@ -1,6 +1,8 @@
 import { complete } from "./llm"
 import crypto from "crypto"
 import { USER_AGENT, robotsAllows } from "./robots"
+import { fetchPublic } from "./safe-fetch"
+import { cleanPageText } from "./boilerplate"
 
 export { robotsAllows }
 
@@ -46,11 +48,13 @@ export type Fetched = { text: string, raw: string, isHtml: boolean }
 // back to Jina Reader markdown for blocked or JavaScript-only sites. `text` is clean text for the LLM.
 export async function fetchSite(domain: string): Promise<Fetched | null> {
   try {
-    const r = await fetch(`https://${domain}`, { headers: { "User-Agent": USER_AGENT, "Accept": "text/html" }, signal: AbortSignal.timeout(8000) })
-    if (r.ok && (r.headers.get("content-type") || "").includes("html")) {
+    // Security: public addresses only, each redirect checked (safe-fetch.ts).
+    const r = await fetchPublic(`https://${domain}`, { headers: { "User-Agent": USER_AGENT, "Accept": "text/html" }, signal: AbortSignal.timeout(8000) })
+    if (r?.ok && (r.headers.get("content-type") || "").includes("html")) {
       const raw = (await r.text()).slice(0, 400_000)
-      const text = raw.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/gi, " ").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim()
-      if (text.length >= 300) return { text: text.slice(0, 3000), raw, isHtml: true }
+      const text = raw.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>|<noscript[\s\S]*?<\/noscript>|<svg[\s\S]*?<\/svg>/gi, " ").replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/\s+/g, " ").trim()
+      // Cookie banners, menus and copyright lines out: the LLM reads less and gets the real content.
+      if (text.length >= 300) return { text: cleanPageText(text).slice(0, 3000), raw, isHtml: true }
     }
   } catch {}
   try {
@@ -61,19 +65,19 @@ export async function fetchSite(domain: string): Promise<Fetched | null> {
     if (!r.ok) return null
     const raw = (await r.text()).slice(0, 100_000)
     if (raw.length < 50) return null
-    return { text: cleanScraped(raw).slice(0, 3000), raw, isHtml: false }
+    return { text: cleanPageText(cleanScraped(raw)).slice(0, 3000), raw, isHtml: false }
   } catch { return null }
 }
 
 // A site's own LAWP from https://<domain>/.well-known/lawp.json always wins over crawling.
 export async function fetchNative(domain: string): Promise<any | null> {
   try {
-    const r = await fetch(`https://${domain}/.well-known/lawp.json`, {
+    // No redirects: a LAWP file must be served from the site itself.
+    const r = await fetchPublic(`https://${domain}/.well-known/lawp.json`, {
       headers: { "Accept": "application/json", "User-Agent": USER_AGENT },
-      redirect: "manual",
       signal: AbortSignal.timeout(5000)
-    })
-    if (!r.ok) return null
+    }, 0)
+    if (!r?.ok) return null
     const text = await r.text()
     if (text.length > 200_000) return null
     const doc = JSON.parse(text)
@@ -96,11 +100,11 @@ export async function scrapeJina(domain: string): Promise<string | null> {
 
 export async function scrapeBasic(domain: string): Promise<string | null> {
   try {
-    const r = await fetch(`https://${domain}`, {
+    const r = await fetchPublic(`https://${domain}`, {
       headers: { "User-Agent": USER_AGENT },
       signal: AbortSignal.timeout(8000)
     })
-    if (!r.ok) return null
+    if (!r?.ok) return null
     const html = await r.text()
     return html.replace(/<script[\s\S]*?<\/script>/gi,"").replace(/<style[\s\S]*?<\/style>/gi,"").replace(/<[^>]+>/g," ").replace(/\s+/g," ").trim().slice(0,3000)
   } catch { return null }
@@ -116,14 +120,19 @@ export function minimal(domain: string, content: string = ""): any {
   }
 }
 
+function parseJson(raw: string): any {
+  try { return JSON.parse(raw) } catch {}
+  const m = raw.match(/\{[\s\S]*\}/)
+  if (m) { try { return JSON.parse(m[0]) } catch {} }
+  return null
+}
+
+// Full LLM conversion: only for sites where the rule-based converter found no actions. The prompt
+// and output are kept short, because free-tier quota is counted in tokens (in and out).
 export async function toLAWP(domain: string, content: string): Promise<any> {
-  const raw = await complete(`Convert to LAWP JSON.\n\nDomain: ${domain}\nContent: ${content.slice(0, 2000)}\n\nWrite every title, summary, description and intent in English, translating if the site is in another language. Set "language" to the ISO 639-1 code of the site's original language.\n\nReturn ONLY valid JSON:\n{"domain":"${domain}","name":"Name","language":"en","pages":{"/":{"title":"T","content":"Summary under 100 words"}},"actions":[{"id":"id","name":"N","description":"D","intent":["k1","k2","k3"],"input":{"type":"text","required":false}}]}\n\nInclude 2-4 real actions only.`)
+  const raw = await complete(`Convert this website to LAWP JSON.\nDomain: ${domain}\nContent: ${content.slice(0, 1600)}\n\nAll text in English (translate if needed). "language" = ISO 639-1 code of the site's own language. Summary: what the site offers and for whom, naming its category (e.g. "accounting software", "Italian restaurant"), under 60 words. 2-4 real actions a visitor can take, each with 3-5 English intent keywords.\n\nJSON only:\n{"domain":"${domain}","name":"Name","language":"en","pages":{"/":{"title":"T","content":"Summary"}},"actions":[{"id":"id","name":"N","description":"D","intent":["k1","k2","k3"],"input":{"type":"text","required":false}}]}`, 20000, 650)
   if (!raw) return minimal(domain, content)
-  let parsed: any = null
-  try { parsed = JSON.parse(raw) } catch {
-    const m = raw.match(/\{[\s\S]*\}/)
-    if (m) { try { parsed = JSON.parse(m[0]) } catch {} }
-  }
+  const parsed = parseJson(raw)
   const pages = parsed?.pages
   if (!pages || typeof pages !== "object" || Array.isArray(pages) || Object.keys(pages).length === 0) {
     console.log(`llm: unusable LAWP for ${domain}: ${raw.replace(/\s+/g, " ").slice(0, 160)}`)
@@ -136,6 +145,32 @@ export async function toLAWP(domain: string, content: string): Promise<any> {
     pages,
     actions: Array.isArray(parsed.actions) ? parsed.actions : [],
     language: typeof parsed.language === "string" && /^[a-z]{2}$/i.test(parsed.language) ? parsed.language.toLowerCase() : undefined
+  }
+}
+
+// Hybrid conversion: the rule-based converter already found the site's real actions (with real
+// URLs); the LLM only writes what rules can't: the name, an English summary naming the category,
+// and search keywords per action. About a third of the tokens of a full conversion, so the free
+// quota covers ~3x more sites. Returns null when no LLM answered (the caller keeps the rules).
+export async function enrichLAWP(domain: string, rules: any, content: string): Promise<any | null> {
+  const actions: any[] = Array.isArray(rules?.actions) ? rules.actions : []
+  if (!actions.length) return null
+  const raw = await complete(`Website: ${domain}\nActions found on it: ${actions.map(a => `${a.id} (${a.name})`).join(", ")}\nContent: ${content.slice(0, 1400)}\n\nReply with JSON only, all text in English (translate if needed):\n{"name":"the brand or business name","language":"ISO 639-1 code of the site's own language","summary":"what the site offers and for whom, naming its category (e.g. 'accounting software', 'Italian restaurant in Lyon'), under 50 words","keywords":{"<action id>":["3-5 search words people would use for this action on this site"]}}`, 20000, 280)
+  const parsed = raw ? parseJson(raw) : null
+  if (!parsed || typeof parsed.summary !== "string" || parsed.summary.length < 20) return null
+  const language = typeof parsed.language === "string" && /^[a-z]{2}$/i.test(parsed.language) ? parsed.language.toLowerCase() : rules.language
+  const name = typeof parsed.name === "string" && parsed.name.trim() && parsed.name.length <= 80 ? parsed.name.trim() : rules.name
+  const home = rules.pages?.["/"] || {}
+  const keywords = parsed.keywords && typeof parsed.keywords === "object" ? parsed.keywords : {}
+  return {
+    ...rules,
+    name,
+    language,
+    pages: { ...rules.pages, "/": { ...home, title: language && language !== "en" ? name : (home.title || name), content: parsed.summary.trim().slice(0, 500) } },
+    actions: actions.map(a => {
+      const extra = Array.isArray(keywords[a.id]) ? keywords[a.id].filter((k: unknown) => typeof k === "string" && k.length <= 40).map((k: string) => k.toLowerCase()) : []
+      return { ...a, intent: [...new Set([...(a.intent || []), ...extra])].slice(0, 10) }
+    })
   }
 }
 
