@@ -5,7 +5,7 @@ import { USER_AGENT } from "./robots"
 // Cheap "has this site changed?" check before an expensive refresh (Jina Reader + LLM): one
 // conditional GET of the homepage. A 304 (ETag / Last-Modified) or the same visible-text hash as
 // last time means unchanged. Needs lawp_sites.http_etag, http_last_modified, page_fingerprint and
-// checked_at (list_eight.sql).
+// refreshed_at (list_eight.sql).
 
 export type Fingerprint = { etag: string | null, lastModified: string | null, text: string | null, notModified: boolean }
 

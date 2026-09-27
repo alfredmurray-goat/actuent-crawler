@@ -36,11 +36,11 @@ async function queue(): Promise<{ domain: string, score: number, overdue: number
   for (let i = 0; i < wanted.length; i += 100) {
     const chunk = wanted.slice(i, i + 100)
     const list = encodeURIComponent(chunk.map(([d]) => `"${d}"`).join(","))
-    // Age counts from the last check, not only the last change (checked_at: list_eight.sql).
-    let res = await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?select=domain,updated_at,checked_at&domain=in.(${list})`, { headers: SUPABASE_HEADERS })
+    // Age counts from the last check, not only the last change (refreshed_at: list_eight.sql).
+    let res = await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?select=domain,updated_at,refreshed_at&domain=in.(${list})`, { headers: SUPABASE_HEADERS })
     if (!res.ok) res = await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?select=domain,updated_at&domain=in.(${list})`, { headers: SUPABASE_HEADERS })
     const rows: any[] = res.ok ? await res.json() : []
-    const updated = new Map(rows.map(r => [r.domain, Math.max(Date.parse(r.updated_at) || 0, Date.parse(r.checked_at) || 0)]))
+    const updated = new Map(rows.map(r => [r.domain, Math.max(Date.parse(r.updated_at) || 0, Date.parse(r.refreshed_at) || 0)]))
     for (const [domain, score] of chunk) {
       const ageDays = updated.has(domain) ? (Date.now() - updated.get(domain)!) / 86400000 : Infinity
       const overdue = ageDays / maxAgeDays(score)!
@@ -91,7 +91,7 @@ async function markChecked(domain: string, fp: Fingerprint | null, row: any) {
   await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?domain=eq.${encodeURIComponent(domain)}`, {
     method: "PATCH", headers: { ...SUPABASE_HEADERS, "Content-Type": "application/json", "Prefer": "return=minimal" },
     body: JSON.stringify({
-      checked_at: new Date().toISOString(),
+      refreshed_at: new Date().toISOString(),
       ...(fp ? { http_etag: fp.etag, http_last_modified: fp.lastModified, page_fingerprint: fp.text || row?.page_fingerprint || null } : {})
     })
   }).catch(() => {})
