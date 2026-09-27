@@ -1,4 +1,5 @@
 import { SUPABASE_URL, SUPABASE_HEADERS, fetchNative, scrapeJina, toLAWP, saveSite, contentHash, robotsAllows } from "./shared"
+import { fingerprint, Fingerprint } from "./freshness"
 
 
 // Refresh by importance: how often agents actually got each site in search results over the last
@@ -35,9 +36,11 @@ async function queue(): Promise<{ domain: string, score: number, overdue: number
   for (let i = 0; i < wanted.length; i += 100) {
     const chunk = wanted.slice(i, i + 100)
     const list = encodeURIComponent(chunk.map(([d]) => `"${d}"`).join(","))
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?select=domain,updated_at&domain=in.(${list})`, { headers: SUPABASE_HEADERS })
+    // Age counts from the last check, not only the last change (checked_at: list_eight.sql).
+    let res = await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?select=domain,updated_at,checked_at&domain=in.(${list})`, { headers: SUPABASE_HEADERS })
+    if (!res.ok) res = await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?select=domain,updated_at&domain=in.(${list})`, { headers: SUPABASE_HEADERS })
     const rows: any[] = res.ok ? await res.json() : []
-    const updated = new Map(rows.map(r => [r.domain, Date.parse(r.updated_at)]))
+    const updated = new Map(rows.map(r => [r.domain, Math.max(Date.parse(r.updated_at) || 0, Date.parse(r.checked_at) || 0)]))
     for (const [domain, score] of chunk) {
       const ageDays = updated.has(domain) ? (Date.now() - updated.get(domain)!) / 86400000 : Infinity
       const overdue = ageDays / maxAgeDays(score)!
@@ -53,21 +56,45 @@ async function recrawlSite(domain: string): Promise<void> {
   if (native) { await saveSite(native); console.log(`native: ${domain}`); return }
 
   if (!await robotsAllows(domain, "/")) { console.log(`robots.txt disallows: ${domain}`); return }
+
+  let existing = await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?select=content_hash,owner_key,http_etag,http_last_modified,page_fingerprint&domain=eq.${encodeURIComponent(domain)}`, { headers: SUPABASE_HEADERS })
+  const freshnessColumns = existing.ok
+  if (!existing.ok) existing = await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?select=content_hash,owner_key&domain=eq.${encodeURIComponent(domain)}`, { headers: SUPABASE_HEADERS })
+  const row = existing.ok ? (await existing.json())?.[0] : null
+  if (row?.owner_key) { console.log(`claimed by owner, not overwritten: ${domain}`); return }
+
+  // Cheap check first: a 304 or the same visible text means nothing to refresh.
+  const fp = freshnessColumns ? await fingerprint(domain, { etag: row?.http_etag, lastModified: row?.http_last_modified }) : null
+  if (fp && (fp.notModified || (fp.text && fp.text === row?.page_fingerprint))) {
+    await markChecked(domain, fp, row)
+    console.log(`unchanged (${fp.notModified ? "304" : "same text"}): ${domain}`)
+    return
+  }
+
   const content = await scrapeJina(domain)
   if (!content) { console.log(`blocked: ${domain}`); return }
 
   // Unchanged content: keep the existing LAWP and spend no LLM tokens.
   const hash = contentHash(content)
-  const existing = await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?select=content_hash,owner_key&domain=eq.${encodeURIComponent(domain)}`, { headers: SUPABASE_HEADERS })
-  const row = existing.ok ? (await existing.json())?.[0] : null
-  if (row?.owner_key) { console.log(`claimed by owner, not overwritten: ${domain}`); return }
-  if (row?.content_hash === hash) { console.log(`unchanged: ${domain}`); return }
+  if (row?.content_hash === hash) { if (freshnessColumns) await markChecked(domain, fp, row); console.log(`unchanged: ${domain}`); return }
 
   const lawp = await toLAWP(domain, content)
   // Never overwrite a good LAWP with a minimal one.
   if (!Array.isArray(lawp.actions) || lawp.actions.length === 0) { console.log(`no usable LAWP, kept existing: ${domain}`); return }
   await saveSite(lawp, hash)
+  if (freshnessColumns) await markChecked(domain, fp, row)
   console.log(`recrawled: ${domain}`)
+}
+
+// Records a check (and the homepage's fingerprint for next time) without touching updated_at.
+async function markChecked(domain: string, fp: Fingerprint | null, row: any) {
+  await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?domain=eq.${encodeURIComponent(domain)}`, {
+    method: "PATCH", headers: { ...SUPABASE_HEADERS, "Content-Type": "application/json", "Prefer": "return=minimal" },
+    body: JSON.stringify({
+      checked_at: new Date().toISOString(),
+      ...(fp ? { http_etag: fp.etag, http_last_modified: fp.lastModified, page_fingerprint: fp.text || row?.page_fingerprint || null } : {})
+    })
+  }).catch(() => {})
 }
 
 async function main() {
