@@ -17,7 +17,10 @@ const slug = (v: string) => v.toLowerCase().replace(/ø/g, "o").replace(/æ/g, "
 
 async function main() {
   const since = new Date(Date.now() - SINCE_HOURS * 3600_000).toISOString()
-  const urls = new Set<string>([`https://${HOST}/site`])
+  const urls = new Set<string>([`https://${HOST}/site`, `https://${HOST}/state/weekly`])
+  // This week's State of the AI web post (weekly_report.ts, Mondays).
+  const [post] = await fetch(`${SUPABASE_URL}/rest/v1/weekly_reports?select=week&created_at=gte.${encodeURIComponent(since)}&order=week.desc&limit=1`, { headers: HEADERS }).then(r => r.ok ? r.json() : []).catch(() => [])
+  if (post?.week) urls.add(`https://${HOST}/state/weekly/${post.week}`)
   let last = ""
   while (urls.size < 50000) {
     const r = await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?select=domain&updated_at=gte.${encodeURIComponent(since)}&actions=neq.%5B%5D&status=is.null&domain=gt.${encodeURIComponent(last)}&order=domain.asc&limit=1000`, { headers: HEADERS })
