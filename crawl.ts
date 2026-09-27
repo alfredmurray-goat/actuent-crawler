@@ -3,6 +3,7 @@ import { heuristicLAWP, withBookingLinks, INFRASTRUCTURE } from "./heuristic"
 import { extractBusiness, extractEvents } from "./business"
 import { fetchLlmsTxt, withLlmsTxt, withLlmsTxtInput } from "./llmstxt"
 import { rescue } from "./rescue"
+import { discoverLawp } from "./discover"
 import fs from "fs"
 import readline from "readline"
 
@@ -87,12 +88,21 @@ type Outcome = "full" | "minimal" | "skipped" | "error"
 
 async function crawlOne(domain: string, label: string): Promise<Outcome> {
   try {
-    const native = await fetchNative(domain)
+    let native = await fetchNative(domain)
     if (!native && !await robotsAllows(domain, "/")) {
       console.log(`${label} robots.txt disallows ${domain} — skipped`)
       return "skipped"
     }
-    const page = native ? null : await fetchSite(domain)
+    let page = native ? null : await fetchSite(domain)
+    // LAWP 0.4: a homepage that links its own LAWP (<link rel="lawp">), e.g. on Shopify or Squarespace.
+    if (!native && page?.isHtml && /rel\s*=\s*["']?lawp/i.test(page.raw)) {
+      const found = await discoverLawp(domain)
+      if (found) {
+        native = { ...found.doc, domain, native: true }
+        page = null
+        console.log(`${label} native LAWP via ${found.via} ${domain}`)
+      }
+    }
 
     let lawp: any, llms: string | null = null
     let conversion: "native" | "llm" | "heuristic" | "minimal"
