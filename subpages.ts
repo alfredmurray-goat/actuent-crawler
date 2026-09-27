@@ -4,6 +4,8 @@ import { SUPABASE_URL, SUPABASE_HEADERS, robotsAllows, saveEvents } from "./shar
 import { extractEvents } from "./business"
 import { USER_AGENT } from "./robots"
 import { sitemapPaths } from "./sitemap"
+import { cleanPageText } from "./boilerplate"
+import { fetchPublic } from "./safe-fetch"
 
 // Indexes the most useful subpages of popular indexed sites, in Tranco order. Pages are found from
 // the site's sitemap (robots.txt "Sitemap:" lines or /sitemap.xml) and ranked by how useful they
@@ -45,14 +47,15 @@ function clean(text: string): string {
 // Returns null when the page is missing, blocked, or just redirects to the homepage.
 async function fetchPage(domain: string, path: string): Promise<{ title: string, content: string } | null> {
   try {
-    const res = await fetch(`https://${domain}${path}`, { headers: { "User-Agent": USER_AGENT }, signal: AbortSignal.timeout(8000) })
+    const res = await fetchPublic(`https://${domain}${path}`, { headers: { "User-Agent": USER_AGENT }, signal: AbortSignal.timeout(8000) })
+    if (!res) return null
     const finalPath = new URL(res.url).pathname.replace(/\/+$/, "") || "/"
     if (res.ok && (res.headers.get("content-type") || "").includes("html")) {
       if (finalPath === "/") return null
       const html = await res.text()
       await saveEvents(domain, extractEvents(html, res.url))
       const title = clean(html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] || "") || path.slice(1)
-      const body = clean(html.match(/<body[\s\S]*<\/body>/i)?.[0] || html)
+      const body = cleanPageText(clean(html.match(/<body[\s\S]*<\/body>/i)?.[0] || html))
       return body.length >= 80 ? { title: title.slice(0, 120), content: body.slice(0, 700) } : null
     }
     if (res.status === 404 || res.status === 410) return null
@@ -66,7 +69,7 @@ async function fetchPage(domain: string, path: string): Promise<{ title: string,
     const source = text.match(/^URL Source:\s*(\S+)/m)?.[1]
     if (source && (new URL(source).pathname.replace(/\/+$/, "") || "/") === "/") return null
     const title = text.match(/^Title:\s*(.+)$/m)?.[1]?.trim() || path.slice(1)
-    const body = clean(text.split(/Markdown Content:/)[1] || text)
+    const body = cleanPageText(clean(text.split(/Markdown Content:/)[1] || text))
     return body.length >= 80 ? { title: title.slice(0, 120), content: body.slice(0, 700) } : null
   } catch { return null }
 }
