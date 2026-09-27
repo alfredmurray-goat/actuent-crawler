@@ -1,3 +1,4 @@
+import { fetchPublic } from "./safe-fetch"
 import { SUPABASE_URL, SUPABASE_HEADERS } from "./shared"
 import { sendEmail, esc } from "./email"
 
@@ -11,7 +12,8 @@ type Priced = { url: string, name: string, price: number | null, currency: strin
 
 async function notify(w: Watch, domain: string, payload: object, subject: string, html: string) {
   if (w.webhook_url?.startsWith("https://")) {
-    await fetch(w.webhook_url, { method: "POST", headers: { "Content-Type": "application/json", "User-Agent": "Actuent/1.0 (+https://actuent.ai)" }, body: JSON.stringify(payload), signal: AbortSignal.timeout(8000) }).catch(() => {})
+    // Security: the webhook URL is user-supplied — public addresses only, and no redirects.
+    await fetchPublic(w.webhook_url, { method: "POST", headers: { "Content-Type": "application/json", "User-Agent": "Actuent/1.0 (+https://actuent.ai)" }, body: JSON.stringify(payload), signal: AbortSignal.timeout(8000) }, 0).catch(() => {})
   }
   const email = await accountEmail(w.api_key)
   if (email) await sendEmail(email, subject, html + `<p style="color:#666;font-size:13px">You're getting this because you asked your AI assistant to watch this product with Actuent. Ask it to stop watching to turn this off.</p>`)

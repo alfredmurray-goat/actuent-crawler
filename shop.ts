@@ -1,3 +1,4 @@
+import { fetchPublic } from "./safe-fetch"
 // Copied from actuent-public/src/utils/products.ts (detection, currency, saving) — keep in sync.
 import { USER_AGENT } from "./robots"
 
@@ -21,8 +22,8 @@ export type Item = {
 
 async function getJson(url: string, timeoutMs = 6000): Promise<any | null> {
   try {
-    const r = await fetch(url, { headers: { "User-Agent": USER_AGENT, "Accept": "application/json" }, signal: AbortSignal.timeout(timeoutMs) })
-    if (!r.ok || !(r.headers.get("content-type") || "").includes("json")) return null
+    const r = await fetchPublic(url, { headers: { "User-Agent": USER_AGENT, "Accept": "application/json" }, signal: AbortSignal.timeout(timeoutMs) })
+    if (!r || !r.ok || !(r.headers.get("content-type") || "").includes("json")) return null
     return await r.json()
   } catch { return null }
 }

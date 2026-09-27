@@ -3,7 +3,7 @@ import { heuristicLAWP, withBookingLinks } from "./heuristic"
 import { extractBusiness, extractEvents, Business, OpeningHours } from "./business"
 import { rescue } from "./rescue"
 import { cleanPages } from "./boilerplate"
-import { fetchPublic } from "./safe-fetch"
+import { fetchPublic, isPublicHost } from "./safe-fetch"
 import { USER_AGENT } from "./robots"
 
 // Local businesses from OpenStreetMap. The Tranco list is big websites; the barber, dentist and
@@ -153,6 +153,7 @@ const EVENT_PATHS = ["/", "/events", "/whats-on", "/program", "/programme", "/ca
 
 export async function venueEvents(domain: string): Promise<number> {
   let saved = 0
+  if (!await isPublicHost(domain)) return 0
   for (const path of EVENT_PATHS) {
     if (Date.now() - started > TIME_BUDGET_MS) break
     if (!await robotsAllows(domain, path)) continue
@@ -181,7 +182,8 @@ function fromOsm(p: Place): any {
 }
 
 async function crawlNew(p: Place): Promise<"saved" | "osm" | "skipped"> {
-  if (!await robotsAllows(p.domain, "/")) return "skipped"
+  // Security: OSM websites are community-edited; only public hosts are fetched.
+  if (!await isPublicHost(p.domain) || !await robotsAllows(p.domain, "/")) return "skipped"
   const page = await fetchSite(p.domain).catch(() => null)
   let lawp: any = page ? heuristicLAWP(p.domain, page.raw, page.isHtml) : null
   if (!lawp?.actions?.length) { const saved = await rescue(p.domain, page, false).catch(() => null); lawp = saved?.lawp || null }
