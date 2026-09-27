@@ -481,5 +481,299 @@
       "godaddy.com",
       "carrd.co"
     ]
+  },
+  {
+    "q": "tivoli copenhagen",
+    "domains": [
+      "tivoli.dk",
+      "tivoligardens.com"
+    ]
+  },
+  {
+    "q": "rijksmuseum amsterdam",
+    "domains": [
+      "rijksmuseum.nl"
+    ]
+  },
+  {
+    "q": "louvre tickets",
+    "domains": [
+      "louvre.fr",
+      "ticketlouvre.fr"
+    ]
+  },
+  {
+    "q": "british museum",
+    "domains": [
+      "britishmuseum.org"
+    ]
+  },
+  {
+    "q": "noma copenhagen",
+    "domains": [
+      "noma.dk"
+    ]
+  },
+  {
+    "q": "moma new york",
+    "domains": [
+      "moma.org"
+    ]
+  },
+  {
+    "q": "sagrada familia tickets",
+    "domains": [
+      "sagradafamilia.org"
+    ]
+  },
+  {
+    "q": "wool sneakers",
+    "domains": [
+      "allbirds.com"
+    ]
+  },
+  {
+    "q": "noise cancelling headphones",
+    "domains": [
+      "bose.com",
+      "sony.com",
+      "sennheiser.com",
+      "apple.com",
+      "jabra.com"
+    ]
+  },
+  {
+    "q": "standing desk",
+    "domains": [
+      "upliftdesk.com",
+      "flexispot.com",
+      "ikea.com",
+      "autonomous.ai",
+      "fully.com"
+    ]
+  },
+  {
+    "q": "flat pack furniture",
+    "domains": [
+      "ikea.com"
+    ]
+  },
+  {
+    "q": "concert tickets",
+    "domains": [
+      "ticketmaster.com",
+      "livenation.com",
+      "seetickets.com",
+      "dice.fm",
+      "eventbrite.com",
+      "axs.com"
+    ]
+  },
+  {
+    "q": "football tickets",
+    "domains": [
+      "ticketmaster.com",
+      "stubhub.com",
+      "viagogo.com",
+      "livefootballtickets.com",
+      "seatgeek.com"
+    ]
+  },
+  {
+    "q": "train tickets europe",
+    "domains": [
+      "thetrainline.com",
+      "trainline.com",
+      "raileurope.com",
+      "interrail.eu",
+      "eurail.com",
+      "omio.com",
+      "sncf-connect.com",
+      "bahn.de"
+    ]
+  },
+  {
+    "q": "car rental",
+    "domains": [
+      "hertz.com",
+      "avis.com",
+      "europcar.com",
+      "sixt.com",
+      "enterprise.com",
+      "rentalcars.com",
+      "kayak.com"
+    ]
+  },
+  {
+    "q": "food delivery",
+    "domains": [
+      "ubereats.com",
+      "deliveroo.co.uk",
+      "doordash.com",
+      "wolt.com",
+      "just-eat.co.uk",
+      "justeat.com",
+      "grubhub.com"
+    ]
+  },
+  {
+    "q": "language learning app",
+    "domains": [
+      "duolingo.com",
+      "babbel.com",
+      "busuu.com",
+      "memrise.com",
+      "rosettastone.com"
+    ]
+  },
+  {
+    "q": "online courses",
+    "domains": [
+      "coursera.org",
+      "udemy.com",
+      "edx.org",
+      "skillshare.com",
+      "khanacademy.org",
+      "linkedin.com"
+    ]
+  },
+  {
+    "q": "vpn",
+    "domains": [
+      "nordvpn.com",
+      "expressvpn.com",
+      "protonvpn.com",
+      "surfshark.com",
+      "mullvad.net",
+      "proton.me"
+    ]
+  },
+  {
+    "q": "cloud hosting",
+    "domains": [
+      "aws.amazon.com",
+      "amazon.com",
+      "cloud.google.com",
+      "google.com",
+      "azure.microsoft.com",
+      "microsoft.com",
+      "digitalocean.com",
+      "vercel.com",
+      "netlify.com",
+      "heroku.com",
+      "linode.com",
+      "hetzner.com"
+    ]
+  },
+  {
+    "q": "domain names",
+    "domains": [
+      "namecheap.com",
+      "godaddy.com",
+      "porkbun.com",
+      "cloudflare.com",
+      "squarespace.com",
+      "hover.com",
+      "spaceship.com",
+      "name.com",
+      "gandi.net"
+    ]
+  },
+  {
+    "q": "recipes",
+    "domains": [
+      "allrecipes.com",
+      "bbcgoodfood.com",
+      "seriouseats.com",
+      "epicurious.com",
+      "food.com",
+      "foodnetwork.com",
+      "nytimes.com",
+      "delish.com",
+      "tasty.co"
+    ]
+  },
+  {
+    "q": "weather forecast",
+    "domains": [
+      "weather.com",
+      "accuweather.com",
+      "yr.no",
+      "bbc.co.uk",
+      "met.office",
+      "metoffice.gov.uk",
+      "windy.com",
+      "wunderground.com",
+      "dmi.dk"
+    ]
+  },
+  {
+    "q": "museo madrid",
+    "domains": [
+      "museodelprado.es",
+      "museoreinasofia.es",
+      "museothyssen.org"
+    ]
+  },
+  {
+    "q": "hôtel paris",
+    "domains": [
+      "booking.com",
+      "hotels.com",
+      "expedia.com",
+      "accor.com",
+      "all.accor.com",
+      "trivago.com",
+      "airbnb.com"
+    ]
+  },
+  {
+    "q": "billetter koncert",
+    "domains": [
+      "ticketmaster.dk",
+      "billetlugen.dk",
+      "ticketmaster.com",
+      "livenation.dk"
+    ]
+  },
+  {
+    "q": "tandlæge",
+    "domains": [
+      "tandlaegeforeningen.dk",
+      "sundhed.dk"
+    ]
+  },
+  {
+    "q": "fahrrad kaufen",
+    "domains": [
+      "rosebikes.de",
+      "canyon.com",
+      "decathlon.de",
+      "fahrrad.de",
+      "bike-discount.de",
+      "bike24.de",
+      "lucky-bike.de"
+    ]
+  },
+  {
+    "q": "pizza london",
+    "domains": [
+      "pizzapilgrims.co.uk",
+      "franco-manca.co.uk",
+      "dominos.co.uk",
+      "pizzaexpress.com",
+      "yardsale.pizza",
+      "ubereats.com",
+      "deliveroo.co.uk"
+    ]
+  },
+  {
+    "q": "barber copenhagen",
+    "domains": [
+      "barberen.dk",
+      "booksy.com",
+      "fresha.com",
+      "planway.com"
+    ]
   }
 ]
