@@ -78,6 +78,20 @@ export function osmHours(text: string | undefined): OpeningHours[] | undefined {
   return out.length ? out : undefined
 }
 
+// OSM addresses use local names and postal districts ("København K", "München"); city pages group
+// by one English name, as the search's multilingual keywords do.
+const LOCAL_CITY: Record<string, string> = {
+  "københavn": "Copenhagen", "kobenhavn": "Copenhagen", "münchen": "Munich", "köln": "Cologne", "wien": "Vienna", "praha": "Prague", "roma": "Rome",
+  "milano": "Milan", "firenze": "Florence", "lisboa": "Lisbon", "warszawa": "Warsaw", "kraków": "Krakow", "göteborg": "Gothenburg",
+  "bruxelles": "Brussels", "brussel": "Brussels", "antwerpen": "Antwerp", "genève": "Geneva", "zürich": "Zurich", "αθήνα": "Athens",
+  "athína": "Athens", "montréal": "Montreal", "den haag": "The Hague", "sevilla": "Seville", "napoli": "Naples", "torino": "Turin", "venezia": "Venice"
+}
+export function cityName(osmCity: string | undefined, fallback: string): string {
+  if (!osmCity) return fallback
+  const base = osmCity.trim().replace(/\s+(K|V|Ø|N|S|NV|SV|C|\d{1,2}(\.|e|er)?( arr\.?)?)$/i, "").trim()
+  return LOCAL_CITY[base.toLowerCase()] || base
+}
+
 type Place = { domain: string, path: string, type: string, venue: boolean, business: Business }
 
 function kindOf(tags: Record<string, string>): string {
@@ -103,7 +117,7 @@ export function placeFrom(el: any, city: string, country: string): Place | null 
     type, name: tags.name,
     ...(tags.phone || tags["contact:phone"] ? { telephone: (tags.phone || tags["contact:phone"]).split(";")[0].trim() } : {}),
     ...(tags.email || tags["contact:email"] ? { email: (tags.email || tags["contact:email"]).split(";")[0].trim() } : {}),
-    address: { ...(street ? { street } : {}), city: tags["addr:city"] || city, ...(tags["addr:postcode"] ? { postcode: tags["addr:postcode"] } : {}), country: (tags["addr:country"] || country).toUpperCase() },
+    address: { ...(street ? { street } : {}), city: cityName(tags["addr:city"], city), ...(tags["addr:postcode"] ? { postcode: tags["addr:postcode"] } : {}), country: (tags["addr:country"] || country).toUpperCase() },
     ...(typeof lat === "number" && typeof lon === "number" ? { geo: { lat, lon } } : {}),
     ...(osmHours(tags.opening_hours) ? { opening_hours: osmHours(tags.opening_hours) } : {}),
     // ODbL attribution: site pages show "© OpenStreetMap contributors" for these details.
