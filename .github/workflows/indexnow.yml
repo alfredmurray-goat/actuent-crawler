@@ -1,0 +1,18 @@
+name: Submit Pages to IndexNow
+on:
+  schedule:
+    - cron: '0 11 * * *'
+  workflow_dispatch:
+jobs:
+  submit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm install
+      - run: npx tsx indexnow.ts
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
