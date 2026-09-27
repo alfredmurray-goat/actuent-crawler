@@ -1,4 +1,4 @@
-import { cleanPageText, cleanPages } from "./boilerplate"
+import { cleanPageText, cleanPages, changedText } from "./boilerplate"
 
 // Weekly: strips cookie banners, menus and copyright lines from page text already in the index
 // (crawled before the crawlers cleaned it themselves). Only non-native, unclaimed sites — a site's
@@ -37,7 +37,7 @@ async function sites(): Promise<number> {
       seen++
       const pages = cleanPages(row.pages)
       if (!pages) continue
-      const path = Object.keys(pages).find(p => pages[p].content !== row.pages[p]?.content)!
+      const path = Object.keys(pages).find(p => pages[p] !== row.pages[p])!
       show(row.domain, row.pages[path]?.content || "", pages[path].content)
       // updated_at=eq. makes the write a no-op if a crawler saved the site in the meantime.
       if (await patch(`${SUPABASE_URL}/rest/v1/lawp_sites?domain=eq.${encodeURIComponent(row.domain)}&updated_at=eq.${encodeURIComponent(row.updated_at)}`, { pages })) changed++
@@ -59,7 +59,7 @@ async function subpages(): Promise<number> {
       seen++
       if (typeof row.content !== "string") continue
       const content = cleanPageText(row.content)
-      if (content === row.content || content === row.content.replace(/\s+/g, " ").trim()) continue
+      if (!changedText(row.content, content)) continue
       show(row.full_url, row.content, content)
       if (await patch(`${SUPABASE_URL}/rest/v1/lawp_pages?full_url=eq.${encodeURIComponent(row.full_url)}&updated_at=eq.${encodeURIComponent(row.updated_at)}`, { content })) changed++
     }
