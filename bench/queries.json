@@ -1,32 +1,332 @@
 [
-  { "q": "nike.com", "domains": ["nike.com"] },
-  { "q": "stripe.com", "domains": ["stripe.com"] },
-  { "q": "basecamp.com", "domains": ["basecamp.com"] },
-  { "q": "github.com", "domains": ["github.com"] },
-  { "q": "nike", "domains": ["nike.com"] },
-  { "q": "airbnb", "domains": ["airbnb.com"] },
-  { "q": "spotify", "domains": ["spotify.com"] },
-  { "q": "project management software", "domains": ["asana.com", "monday.com", "trello.com", "basecamp.com", "notion.so", "clickup.com", "atlassian.com", "smartsheet.com", "wrike.com", "teamwork.com", "linear.app"] },
-  { "q": "accounting software", "domains": ["quickbooks.intuit.com", "intuit.com", "xero.com", "freshbooks.com", "sage.com", "zoho.com", "waveapps.com", "quickbooks.com"] },
-  { "q": "online payments", "domains": ["stripe.com", "paypal.com", "adyen.com", "squareup.com", "square.com", "mollie.com", "braintreepayments.com", "checkout.com"] },
-  { "q": "running shoes", "domains": ["nike.com", "adidas.com", "asics.com", "brooksrunning.com", "hoka.com", "newbalance.com", "on.com", "on-running.com", "saucony.com", "runnersworld.com", "allbirds.com"] },
-  { "q": "video conferencing", "domains": ["zoom.us", "zoom.com", "teams.microsoft.com", "microsoft.com", "meet.google.com", "webex.com", "whereby.com"] },
-  { "q": "email marketing", "domains": ["mailchimp.com", "klaviyo.com", "brevo.com", "sendinblue.com", "convertkit.com", "kit.com", "campaignmonitor.com", "constantcontact.com", "hubspot.com"] },
-  { "q": "website builder", "domains": ["wix.com", "squarespace.com", "webflow.com", "wordpress.com", "shopify.com", "framer.com", "godaddy.com", "carrd.co"] },
-  { "q": "online store platform", "domains": ["shopify.com", "bigcommerce.com", "woocommerce.com", "wix.com", "squarespace.com", "ecwid.com"] },
-  { "q": "hotel booking", "domains": ["booking.com", "expedia.com", "hotels.com", "airbnb.com", "trivago.com", "agoda.com", "kayak.com", "tripadvisor.com"] },
-  { "q": "cheap flights", "domains": ["skyscanner.net", "skyscanner.com", "kayak.com", "google.com", "expedia.com", "momondo.com", "kiwi.com", "ryanair.com"] },
-  { "q": "music streaming", "domains": ["spotify.com", "music.apple.com", "apple.com", "deezer.com", "tidal.com", "soundcloud.com", "youtube.com", "music.youtube.com", "pandora.com"] },
-  { "q": "password manager", "domains": ["1password.com", "bitwarden.com", "lastpass.com", "dashlane.com", "keepersecurity.com", "proton.me", "nordpass.com"] },
-  { "q": "design tool", "domains": ["figma.com", "canva.com", "sketch.com", "adobe.com", "framer.com", "penpot.app"] },
-  { "q": "note taking app", "domains": ["notion.so", "evernote.com", "obsidian.md", "onenote.com", "bear.app", "craft.do", "simplenote.com", "joplinapp.org"] },
-  { "q": "crm software", "domains": ["salesforce.com", "hubspot.com", "pipedrive.com", "zoho.com", "freshworks.com", "monday.com", "attio.com"] },
-  { "q": "laufschuhe", "domains": ["nike.com", "adidas.com", "asics.com", "brooksrunning.com", "hoka.com", "newbalance.com", "on.com", "on-running.com", "zalando.de", "runnerspoint.de", "saucony.com"], "language": "de" },
-  { "q": "løbesko", "domains": ["nike.com", "adidas.com", "asics.com", "hoka.com", "newbalance.com", "on.com", "on-running.com", "zalando.dk", "løberen.dk", "sportmaster.dk", "saucony.com"], "language": "da" },
-  { "q": "logiciel de comptabilité", "domains": ["quickbooks.intuit.com", "intuit.com", "xero.com", "sage.com", "pennylane.com", "zoho.com", "freshbooks.com", "quickbooks.com"], "language": "fr" },
-  { "q": "baby monitor", "domains": ["nanit.com", "owletcare.com", "wyze.com", "philips.com", "motorolanursery.com", "eufy.com", "miku.io"] },
-  { "q": "barber amsterdam", "tld": ".nl", "category": "hair_beauty" },
-  { "q": "frisør københavn", "tld": ".dk", "category": "hair_beauty" },
-  { "q": "coffee roastery copenhagen", "tld": ".dk", "category": "cafe" },
-  { "q": "italian restaurant london", "tld": ".uk", "category": "restaurant" }
+  {
+    "q": "nike.com",
+    "domains": [
+      "nike.com"
+    ]
+  },
+  {
+    "q": "stripe.com",
+    "domains": [
+      "stripe.com"
+    ]
+  },
+  {
+    "q": "basecamp.com",
+    "domains": [
+      "basecamp.com"
+    ]
+  },
+  {
+    "q": "github.com",
+    "domains": [
+      "github.com"
+    ]
+  },
+  {
+    "q": "nike",
+    "domains": [
+      "nike.com"
+    ]
+  },
+  {
+    "q": "airbnb",
+    "domains": [
+      "airbnb.com"
+    ]
+  },
+  {
+    "q": "spotify",
+    "domains": [
+      "spotify.com"
+    ]
+  },
+  {
+    "q": "project management software",
+    "domains": [
+      "asana.com",
+      "monday.com",
+      "trello.com",
+      "basecamp.com",
+      "notion.so",
+      "clickup.com",
+      "atlassian.com",
+      "smartsheet.com",
+      "wrike.com",
+      "teamwork.com",
+      "linear.app"
+    ]
+  },
+  {
+    "q": "accounting software",
+    "domains": [
+      "quickbooks.intuit.com",
+      "intuit.com",
+      "xero.com",
+      "freshbooks.com",
+      "sage.com",
+      "zoho.com",
+      "waveapps.com",
+      "quickbooks.com"
+    ]
+  },
+  {
+    "q": "online payments",
+    "domains": [
+      "stripe.com",
+      "paypal.com",
+      "adyen.com",
+      "squareup.com",
+      "square.com",
+      "mollie.com",
+      "braintreepayments.com",
+      "checkout.com"
+    ]
+  },
+  {
+    "q": "running shoes",
+    "domains": [
+      "adidas.com",
+      "allbirds.com",
+      "altrarunning.com",
+      "asics.com",
+      "brooksrunning.com",
+      "hoka.com",
+      "newbalance.com",
+      "nike.com",
+      "on-running.com",
+      "on.com",
+      "puma.com",
+      "runnersworld.com",
+      "saucony.com"
+    ]
+  },
+  {
+    "q": "video conferencing",
+    "domains": [
+      "zoom.us",
+      "zoom.com",
+      "teams.microsoft.com",
+      "microsoft.com",
+      "meet.google.com",
+      "webex.com",
+      "whereby.com"
+    ]
+  },
+  {
+    "q": "email marketing",
+    "domains": [
+      "mailchimp.com",
+      "klaviyo.com",
+      "brevo.com",
+      "sendinblue.com",
+      "convertkit.com",
+      "kit.com",
+      "campaignmonitor.com",
+      "constantcontact.com",
+      "hubspot.com"
+    ]
+  },
+  {
+    "q": "website builder",
+    "domains": [
+      "wix.com",
+      "squarespace.com",
+      "webflow.com",
+      "wordpress.com",
+      "shopify.com",
+      "framer.com",
+      "godaddy.com",
+      "carrd.co"
+    ]
+  },
+  {
+    "q": "online store platform",
+    "domains": [
+      "shopify.com",
+      "bigcommerce.com",
+      "woocommerce.com",
+      "wix.com",
+      "squarespace.com",
+      "ecwid.com"
+    ]
+  },
+  {
+    "q": "hotel booking",
+    "domains": [
+      "booking.com",
+      "expedia.com",
+      "hotels.com",
+      "airbnb.com",
+      "trivago.com",
+      "agoda.com",
+      "kayak.com",
+      "tripadvisor.com"
+    ]
+  },
+  {
+    "q": "cheap flights",
+    "domains": [
+      "cheapoair.com",
+      "edreams.com",
+      "expedia.com",
+      "google.com",
+      "kayak.com",
+      "kiwi.com",
+      "momondo.com",
+      "opodo.com",
+      "ryanair.com",
+      "skypicker.com",
+      "skyscanner.com",
+      "skyscanner.net"
+    ]
+  },
+  {
+    "q": "music streaming",
+    "domains": [
+      "apple.com",
+      "deezer.com",
+      "music.apple.com",
+      "music.youtube.com",
+      "pandora.com",
+      "soundcloud.com",
+      "spotify.com",
+      "tidal.com",
+      "youtube.com"
+    ]
+  },
+  {
+    "q": "password manager",
+    "domains": [
+      "1password.com",
+      "1password.eu",
+      "bitwarden.com",
+      "dashlane.com",
+      "keepersecurity.com",
+      "lastpass.com",
+      "nordpass.com",
+      "proton.me"
+    ]
+  },
+  {
+    "q": "design tool",
+    "domains": [
+      "figma.com",
+      "canva.com",
+      "sketch.com",
+      "adobe.com",
+      "framer.com",
+      "penpot.app"
+    ]
+  },
+  {
+    "q": "note taking app",
+    "domains": [
+      "bear.app",
+      "craft.do",
+      "evernote.com",
+      "goodnotes.com",
+      "joplinapp.org",
+      "notion.so",
+      "obsidian.md",
+      "onenote.com",
+      "simplenote.com",
+      "standardnotes.com"
+    ]
+  },
+  {
+    "q": "crm software",
+    "domains": [
+      "salesforce.com",
+      "hubspot.com",
+      "pipedrive.com",
+      "zoho.com",
+      "freshworks.com",
+      "monday.com",
+      "attio.com"
+    ]
+  },
+  {
+    "q": "laufschuhe",
+    "domains": [
+      "adidas.com",
+      "altrarunning.com",
+      "asics.com",
+      "brooksrunning.com",
+      "hoka.com",
+      "newbalance.com",
+      "nike.com",
+      "on-running.com",
+      "on.com",
+      "runnerspoint.de",
+      "saucony.com",
+      "zalando.de"
+    ],
+    "language": "de"
+  },
+  {
+    "q": "løbesko",
+    "domains": [
+      "adidas.com",
+      "altrarunning.com",
+      "asics.com",
+      "brooksrunning.com",
+      "hoka.com",
+      "løberen.dk",
+      "newbalance.com",
+      "nike.com",
+      "on-running.com",
+      "on.com",
+      "saucony.com",
+      "sportmaster.dk",
+      "zalando.dk"
+    ],
+    "language": "da"
+  },
+  {
+    "q": "logiciel de comptabilité",
+    "domains": [
+      "quickbooks.intuit.com",
+      "intuit.com",
+      "xero.com",
+      "sage.com",
+      "pennylane.com",
+      "zoho.com",
+      "freshbooks.com",
+      "quickbooks.com"
+    ],
+    "language": "fr"
+  },
+  {
+    "q": "baby monitor",
+    "domains": [
+      "nanit.com",
+      "owletcare.com",
+      "wyze.com",
+      "philips.com",
+      "motorolanursery.com",
+      "eufy.com",
+      "miku.io"
+    ]
+  },
+  {
+    "q": "barber amsterdam",
+    "tld": ".nl",
+    "category": "hair_beauty"
+  },
+  {
+    "q": "frisør københavn",
+    "tld": ".dk",
+    "category": "hair_beauty"
+  },
+  {
+    "q": "coffee roastery copenhagen",
+    "tld": ".dk",
+    "category": "cafe"
+  },
+  {
+    "q": "italian restaurant london",
+    "tld": ".uk",
+    "category": "restaurant"
+  }
 ]
