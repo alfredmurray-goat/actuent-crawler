@@ -72,6 +72,33 @@ async function main() {
       }
     }))
   }
+
+  // The long tail: every other indexed site that has never been checked (local shops from
+  // OpenStreetMap, sites found by agents' searches…). Likely shops first, then everything else;
+  // each is checked once, and the ones that turn out to be shops are refreshed like the rest.
+  const check = async (domain: string) => {
+    try {
+      const found = await robotsAllows(domain, "/products.json") ? await fetchProducts(domain) : []
+      await saveProducts(domain, found)
+      checked++
+      if (found.length) { shops++; items += found.length; console.log(`+${found.length} products ${domain} (long tail)`) }
+    } catch (e) { console.log(`error ${domain}: ${e}`) }
+  }
+  const tried = new Set<string>()
+  for (const filter of ["category=like.shop*", "category=in.(bakery,cafe,pets,food_delivery,hair_beauty,spa_wellness,fitness,events,museum_culture)", "or=(category.is.null,category.not.in.(adult,gambling))"]) {
+    while (Date.now() - start < TIME_BUDGET_MS) {
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?select=domain&products_crawled_at=is.null&status=is.null&owner_key=is.null&${filter}&order=updated_at.desc&limit=${CHUNK * 5}`, { headers: SUPABASE_HEADERS })
+      if (!r.ok) { console.log(`long tail: ${r.status} ${await r.text()}`); break }
+      // A site whose timestamp didn't save would come back every time; each is tried once per run.
+      const todo: string[] = (await r.json()).map((row: any) => row.domain).filter((d: string) => !tried.has(d))
+      if (!todo.length) break
+      todo.forEach(d => tried.add(d))
+      let index = 0
+      await Promise.all(Array.from({ length: CONCURRENCY * 2 }, async () => {
+        while (index < todo.length && Date.now() - start < TIME_BUDGET_MS) await check(todo[index++])
+      }))
+    }
+  }
   console.log(`Done in ${Math.round((Date.now() - start) / 60000)} min. ${checked} sites checked, ${shops} shops, ${items} products indexed.`)
 }
 
