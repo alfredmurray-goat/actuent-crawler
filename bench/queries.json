@@ -328,5 +328,158 @@
     "q": "italian restaurant london",
     "tld": ".uk",
     "category": "restaurant"
+  },
+  {
+    "q": "gestion de projet",
+    "domains": [
+      "asana.com",
+      "monday.com",
+      "trello.com",
+      "basecamp.com",
+      "notion.so",
+      "clickup.com",
+      "atlassian.com",
+      "smartsheet.com",
+      "wrike.com",
+      "teamwork.com",
+      "linear.app"
+    ]
+  },
+  {
+    "q": "projektmanagement software",
+    "domains": [
+      "asana.com",
+      "monday.com",
+      "trello.com",
+      "basecamp.com",
+      "notion.so",
+      "clickup.com",
+      "atlassian.com",
+      "smartsheet.com",
+      "wrike.com",
+      "teamwork.com",
+      "linear.app"
+    ]
+  },
+  {
+    "q": "passwort-manager",
+    "domains": [
+      "1password.com",
+      "1password.eu",
+      "bitwarden.com",
+      "dashlane.com",
+      "keepersecurity.com",
+      "lastpass.com",
+      "nordpass.com",
+      "proton.me"
+    ]
+  },
+  {
+    "q": "gestionnaire de mots de passe",
+    "domains": [
+      "1password.com",
+      "1password.eu",
+      "bitwarden.com",
+      "dashlane.com",
+      "keepersecurity.com",
+      "lastpass.com",
+      "nordpass.com",
+      "proton.me"
+    ]
+  },
+  {
+    "q": "videokonferenz",
+    "domains": [
+      "zoom.us",
+      "zoom.com",
+      "teams.microsoft.com",
+      "microsoft.com",
+      "meet.google.com",
+      "webex.com",
+      "whereby.com"
+    ]
+  },
+  {
+    "q": "musik streaming",
+    "domains": [
+      "apple.com",
+      "deezer.com",
+      "music.apple.com",
+      "music.youtube.com",
+      "pandora.com",
+      "soundcloud.com",
+      "spotify.com",
+      "tidal.com",
+      "youtube.com"
+    ]
+  },
+  {
+    "q": "pagos online",
+    "domains": [
+      "stripe.com",
+      "paypal.com",
+      "adyen.com",
+      "squareup.com",
+      "square.com",
+      "mollie.com",
+      "braintreepayments.com",
+      "checkout.com"
+    ]
+  },
+  {
+    "q": "buchhaltungssoftware",
+    "domains": [
+      "quickbooks.intuit.com",
+      "intuit.com",
+      "xero.com",
+      "freshbooks.com",
+      "sage.com",
+      "zoho.com",
+      "waveapps.com",
+      "quickbooks.com"
+    ]
+  },
+  {
+    "q": "software di contabilità",
+    "domains": [
+      "quickbooks.intuit.com",
+      "intuit.com",
+      "xero.com",
+      "freshbooks.com",
+      "sage.com",
+      "zoho.com",
+      "waveapps.com",
+      "quickbooks.com"
+    ]
+  },
+  {
+    "q": "billige flüge",
+    "domains": [
+      "cheapoair.com",
+      "edreams.com",
+      "expedia.com",
+      "google.com",
+      "kayak.com",
+      "kiwi.com",
+      "momondo.com",
+      "opodo.com",
+      "ryanair.com",
+      "skypicker.com",
+      "skyscanner.com",
+      "skyscanner.net"
+    ]
+  },
+  {
+    "q": "creador de páginas web",
+    "domains": [
+      "wix.com",
+      "squarespace.com",
+      "webflow.com",
+      "wordpress.com",
+      "shopify.com",
+      "framer.com",
+      "godaddy.com",
+      "carrd.co"
+    ]
   }
 ]
