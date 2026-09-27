@@ -1,0 +1,26 @@
+name: Load Popularity Ranks
+on:
+  schedule:
+    - cron: '0 4 * * 0'
+  workflow_dispatch:
+concurrency:
+  group: popularity
+  cancel-in-progress: false
+jobs:
+  load:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Download Tranco list
+        run: |
+          curl -L "https://tranco-list.eu/top-1m.csv.zip" -o tranco.zip
+          unzip tranco.zip
+          mv top-1m.csv tranco_PY69J.csv
+      - run: npm install
+      - run: npx tsx popularity.ts
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
