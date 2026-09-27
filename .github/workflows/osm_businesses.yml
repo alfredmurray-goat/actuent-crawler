@@ -1,0 +1,28 @@
+name: Local Businesses from OpenStreetMap
+on:
+  schedule:
+    - cron: '30 1 * * *'
+  workflow_dispatch:
+    inputs:
+      minutes:
+        description: 'Time budget in minutes'
+        default: '100'
+        required: false
+concurrency:
+  group: osm-businesses
+  cancel-in-progress: false
+jobs:
+  osm:
+    runs-on: ubuntu-latest
+    timeout-minutes: 115
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm install
+      - run: npx tsx osm_businesses.ts
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          JINA_API_KEY: ${{ secrets.JINA_API_KEY }}
+          TIME_BUDGET_MIN: ${{ github.event.inputs.minutes || '100' }}
