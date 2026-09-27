@@ -2,6 +2,7 @@
 // indexed brand.com) so they're left out of search and directories. Flags only — nothing is
 // deleted, and updated_at is never changed, so the reconvert job isn't disturbed.
 // Claimed and native sites are never flagged. Needs list_four.sql.
+import { isPublicHost } from "./safe-fetch"
 
 const SUPABASE_URL = "https://bcmwypjrahtxogytsvuc.supabase.co"
 const KEY = process.env.SUPABASE_SERVICE_KEY!
@@ -25,6 +26,7 @@ const bare = (host: string) => host.toLowerCase().replace(/^www\./, "")
 async function redirectTarget(domain: string): Promise<string | null> {
   for (const url of [`https://${domain}/`, `http://${domain}/`]) {
     try {
+      if (!await isPublicHost(new URL(url).hostname)) return null
       const r = await fetch(url, { redirect: "manual", headers: { "User-Agent": USER_AGENT }, signal: AbortSignal.timeout(7000) })
       if (r.status < 300 || r.status >= 400) return null
       const location = r.headers.get("location")

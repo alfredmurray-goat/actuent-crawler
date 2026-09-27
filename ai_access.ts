@@ -2,6 +2,7 @@
 // blocks from the whole site (GPTBot, ClaudeBot, PerplexityBot…). Many sites block agents without
 // knowing it; site pages show the result with a fix. Writes only lawp_sites.ai_access — never
 // updated_at. Rechecks every 30 days. Needs list_five.sql.
+import { fetchPublic } from "./safe-fetch"
 
 const SUPABASE_URL = "https://bcmwypjrahtxogytsvuc.supabase.co"
 const KEY = process.env.SUPABASE_SERVICE_KEY!
@@ -58,7 +59,8 @@ export function blockedEverywhere(groups: Group[], bot: string): boolean {
 
 async function check(domain: string): Promise<object> {
   try {
-    const r = await fetch(`https://${domain}/robots.txt`, { headers: { "User-Agent": "Mozilla/5.0 (compatible; Actuent/1.0; +https://docs.actuent.ai/bot)" }, signal: AbortSignal.timeout(7000) })
+    const r = await fetchPublic(`https://${domain}/robots.txt`, { headers: { "User-Agent": "Mozilla/5.0 (compatible; Actuent/1.0; +https://docs.actuent.ai/bot)" }, signal: AbortSignal.timeout(7000) })
+    if (!r) return { robots_txt: null, blocked: [], checked_at: new Date().toISOString() }
     const type = r.headers.get("content-type") || ""
     if (!r.ok || type.includes("html")) return { robots_txt: false, blocked: [], checked_at: new Date().toISOString() }
     const groups = parseRobots((await r.text()).slice(0, 200_000))

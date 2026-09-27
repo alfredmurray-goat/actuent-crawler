@@ -1,4 +1,5 @@
 import { USER_AGENT } from "./robots"
+import { fetchPublic } from "./safe-fetch"
 
 // Finds a site's most useful pages from its sitemap(s). Used by subpages.ts.
 
@@ -19,7 +20,8 @@ const USEFUL: { type: string, points: number, words: string[] }[] = [
 const USELESS = /\/(tag|tags|category|author|page\/\d|wp-|cdn-cgi|search|login|signin|cart|checkout|account|privacy|cookie|terms|legal|feed|amp|blog|blogs|news|newsroom|press|changelog|releases|articles|stories|customers|case-studies|integrations|webinars|podcast|guides|gettingreal)(\/|$)|\.(pdf|jpg|jpeg|png|gif|xml|zip)$|\?|\/\d{4}\/\d{2}\//i
 async function getText(url: string, ms = 8000): Promise<string | null> {
   try {
-    const r = await fetch(url, { headers: { "User-Agent": USER_AGENT }, signal: AbortSignal.timeout(ms) })
+    const r = await fetchPublic(url, { headers: { "User-Agent": USER_AGENT }, signal: AbortSignal.timeout(ms) })
+    if (!r) return null
     return r.ok ? (await r.text()).slice(0, 5_000_000) : null
   } catch { return null }
 }

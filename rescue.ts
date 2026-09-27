@@ -2,6 +2,7 @@ import { toLAWP } from "./shared"
 import { heuristicLAWP } from "./heuristic"
 import { fetchLlmsTxt, llmsTxtSummary } from "./llmstxt"
 import { sitemapPaths } from "./sitemap"
+import { fetchPublic } from "./safe-fetch"
 
 // Before the mass crawler saves a site as minimal ("Website at …"), it tries harder, the same way
 // the reconvert job would later — LLM first, then the rule-based converter — but with more sources:
@@ -21,8 +22,8 @@ function htmlToText(raw: string): string {
 
 async function fetchHtml(url: string): Promise<Source | null> {
   try {
-    const r = await fetch(url, { headers: { "User-Agent": UA, "Accept": "text/html" }, signal: AbortSignal.timeout(8000) })
-    if (!r.ok || !(r.headers.get("content-type") || "").includes("html")) return null
+    const r = await fetchPublic(url, { headers: { "User-Agent": UA, "Accept": "text/html" }, signal: AbortSignal.timeout(8000) })
+    if (!r?.ok || !(r.headers.get("content-type") || "").includes("html")) return null
     const raw = (await r.text()).slice(0, 400_000)
     const text = htmlToText(raw)
     return text.length >= 200 ? { text: text.slice(0, 3000), raw, isHtml: true, from: url } : null
