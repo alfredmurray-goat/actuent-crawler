@@ -1,0 +1,24 @@
+name: Index Quality
+on:
+  schedule:
+    - cron: '0 6 * * 2'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Only report what would change'
+        type: boolean
+        default: true
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 100
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm install
+      - run: npx tsx quality.ts
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && '1' || '' }}
