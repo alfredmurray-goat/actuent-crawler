@@ -151,7 +151,7 @@ async function known(domains: string[]): Promise<Map<string, { business: boolean
 // Events pages venues commonly use; the homepage is read too.
 const EVENT_PATHS = ["/", "/events", "/whats-on", "/program", "/programme", "/calendar", "/kalender", "/agenda", "/veranstaltungen", "/konzerte", "/shows", "/concerts"]
 
-async function venueEvents(domain: string): Promise<number> {
+export async function venueEvents(domain: string): Promise<number> {
   let saved = 0
   for (const path of EVENT_PATHS) {
     if (Date.now() - started > TIME_BUDGET_MS) break
