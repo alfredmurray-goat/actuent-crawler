@@ -1,6 +1,7 @@
 import { SUPABASE_URL, SUPABASE_HEADERS } from "./shared"
 import { fetchPublic, isPublicHost } from "./safe-fetch"
 import { USER_AGENT } from "./robots"
+import { cleanName, cleanTitles } from "./convert"
 
 // Weekly index quality pass (list_eleven.sql), in four steps:
 //   1. "Did you mean" vocabulary: rebuilt from site names, titles, keywords and categories.
@@ -27,12 +28,12 @@ async function patch(domain: string, body: object) {
 async function vocabulary() {
   if (DRY) { console.log("1. vocabulary: skipped (dry run)"); return }
   const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/build_search_vocab`, { method: "POST", headers: { ...SUPABASE_HEADERS, "Content-Type": "application/json" }, body: "{}" })
-  console.log(`1. vocabulary: ${r.ok ? `${await r.json()} words` : `failed ${r.status} ${(await r.text()).slice(0, 120)}`}`)
+  console.log(`1. vocabulary: ${r.ok ? `${await r.json()} words` : `failed ${r.status} ${(await r.text()).slice(0, 200)}`}`)
 }
 
 async function duplicates() {
   const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/content_duplicates`, { method: "POST", headers: { ...SUPABASE_HEADERS, "Content-Type": "application/json" }, body: JSON.stringify({ max_groups: 1000 }) })
-  if (!r.ok) { console.log(`2. duplicates: not available (${r.status})`); return }
+  if (!r.ok) { console.log(`2. duplicates: failed ${r.status} ${(await r.text()).slice(0, 200)}`); return }
   const groups: { content_hash: string, domains: string[] }[] = await r.json()
   let flagged = 0
   for (const g of groups) {
@@ -59,7 +60,7 @@ function badSummary(text: string, language?: string): string | null {
 async function summaries() {
   let last = "", seen = 0, sent = 0
   const reasons: Record<string, number> = {}
-  while (Date.now() - started < TIME_BUDGET_MS / 3) {
+  while (Date.now() - started < TIME_BUDGET_MS / 4) {
     const r = await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?select=domain,pages,language,conversion&conversion=eq.llm&status=is.null&owner_key=is.null&domain=gt.${encodeURIComponent(last)}&order=domain.asc&limit=1000`, { headers: SUPABASE_HEADERS })
     if (!r.ok) { console.log(`3. summaries: ${r.status}`); return }
     const rows: any[] = await r.json()
@@ -119,10 +120,49 @@ async function actionLinks() {
   console.log(`4. action links: ${checked} links on ${sites} sites checked, ${removed} dead ${DRY ? "would be " : ""}removed`)
 }
 
+// 5. Names and titles ("Home - Nike" → "Nike"), and sites labelled English whose summary isn't.
+async function namesAndLanguage() {
+  let last = "", seen = 0, renamed = 0, relabelled = 0
+  while (Date.now() - started < TIME_BUDGET_MS * 0.8) {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?select=domain,name,pages,language,conversion&status=is.null&owner_key=is.null&native=is.false&domain=gt.${encodeURIComponent(last)}&order=domain.asc&limit=1000`, { headers: SUPABASE_HEADERS })
+    if (!r.ok) { console.log(`5. names: ${r.status}`); return }
+    const rows: any[] = await r.json()
+    if (!rows.length) break
+    for (const row of rows) {
+      seen++
+      const name = cleanName(row.name, row.domain)
+      const pages = cleanTitles(row.pages || {})
+      const changed = name !== row.name || JSON.stringify(pages) !== JSON.stringify(row.pages || {})
+      const home = String(row.pages?.["/"]?.content || "")
+      const notEnglish = row.language === "en" && badSummary(home, "en") === "not English"
+      if (changed || notEnglish) {
+        await patch(row.domain, { ...(changed ? { name, pages } : {}), ...(notEnglish ? { language: null, conversion: "heuristic" } : {}) })
+        if (changed) renamed++
+        if (notEnglish) relabelled++
+      }
+    }
+    last = rows[rows.length - 1].domain
+  }
+  console.log(`5. names: ${seen} sites checked, ${renamed} names/titles ${DRY ? "would be " : ""}cleaned, ${relabelled} marked for a new English summary`)
+}
+
+// 6. Popular sites not refreshed for 180 days go into the crawl queue (crawl_queue.ts, every 30 min).
+async function staleSites() {
+  const cutoff = encodeURIComponent(new Date(Date.now() - 180 * 86400000).toISOString())
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?select=domain&status=is.null&owner_key=is.null&popularity_rank=lte.50000&updated_at=lt.${cutoff}&order=popularity_rank.asc&limit=500`, { headers: SUPABASE_HEADERS })
+  const rows: any[] = r.ok ? await r.json() : []
+  if (!DRY) for (const { domain } of rows) {
+    await fetch(`${SUPABASE_URL}/rest/v1/rpc/queue_crawl`, { method: "POST", headers: { ...SUPABASE_HEADERS, "Content-Type": "application/json" }, body: JSON.stringify({ d: domain }) }).catch(() => {})
+  }
+  console.log(`6. stale popular sites: ${rows.length} ${DRY ? "would be " : ""}queued for a refresh`)
+}
+
 async function main() {
   await vocabulary()
   await duplicates()
   await summaries()
+  await namesAndLanguage()
+  await staleSites()
   await actionLinks()
 }
 

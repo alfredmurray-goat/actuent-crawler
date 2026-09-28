@@ -3,7 +3,7 @@ import { INFRASTRUCTURE } from "./heuristic"
 import { extractEvents } from "./business"
 import { fetchLlmsTxt } from "./llmstxt"
 import { discoverLawp } from "./discover"
-import { convertSite, domainGone } from "./convert"
+import { convertSite, domainGone, isParkedOrError } from "./convert"
 import fs from "fs"
 import readline from "readline"
 
@@ -136,6 +136,7 @@ async function crawlOne(domain: string, label: string): Promise<Outcome> {
         if (result.from !== "homepage") console.log(`${label} rescued via ${result.from} ${domain}`)
       } else {
         if (!page && await domainGone(domain)) { console.log(`${label} no such domain ${domain}`); return "skipped" }
+        if (page && isParkedOrError(page.text)) { console.log(`${label} parked or error page — skipped ${domain}`); return "skipped" }
         console.log(`${label} nothing usable — saving minimal ${domain}`)
         lawp = minimal(domain, page?.text || ""); conversion = "minimal"
       }

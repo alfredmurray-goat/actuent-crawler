@@ -2,7 +2,7 @@ import { SUPABASE_URL, SUPABASE_HEADERS, fetchNative, fetchSite, saveSite, saveE
 import { INFRASTRUCTURE } from "./heuristic"
 import { extractEvents } from "./business"
 import { fetchLlmsTxt } from "./llmstxt"
-import { convertSite, domainGone } from "./convert"
+import { convertSite, domainGone, isParkedOrError } from "./convert"
 
 // Works through the conversion backlog in two phases:
 //   1. While there's LLM quota: the most popular sites first (Tranco rank), minimal or rule-based,
@@ -91,6 +91,8 @@ async function main() {
           const llms = await fetchLlmsTxt(domain)
           const result = await convertSite(domain, page, llms, llmOn() ? llm : null)
           // A rule-based site the LLM couldn't upgrade stays as it is.
+          // Parked or error page: flagged, which takes it out of search (cleanup_sites uses the same status).
+          if (!result && page && isParkedOrError(page.text)) { await touch(domain, { status: "parked" }); tally.unreachable++; continue }
           if (!result || (row.conversion === "heuristic" && result.conversion === "heuristic")) { await touch(domain); tally.unchanged++; continue }
           await saveSite(result.lawp, page ? contentHash(page.text) : undefined, result.conversion)
           tally[result.conversion]++
