@@ -84,6 +84,10 @@ async function main() {
   }
   for (const l of ["en", "de", "fr", "es", "nl", "it", "pt", "da", "sv", "ja"]) languages[l] = await count("lawp_sites", `language=eq.${l}&status=is.null`) || 0
 
+  // Click-through: visits Actuent sent to sites (api.actuent.ai/go links) per search this week.
+  const clickRows: any[] = await fetch(`${SUPABASE_URL}/rest/v1/link_clicks?select=clicks&day=gte.${new Date(today.getTime() - 7 * 86400000).toISOString().slice(0, 10)}&limit=10000`, { headers: SUPABASE_HEADERS }).then(r => r.ok ? r.json() : []).catch(() => [])
+  const visitsSent = clickRows.reduce((n, r) => n + (Number(r.clicks) || 0), 0)
+
   const previous = await fetch(`${SUPABASE_URL}/rest/v1/weekly_reports?select=data&week=lt.${week}&order=week.desc&limit=1`, { headers: SUPABASE_HEADERS })
     .then(r => r.ok ? r.json() : []).then(rows => rows?.[0]?.data || null).catch(() => null)
 
@@ -91,6 +95,7 @@ async function main() {
     week, sites, readable, readable_percent: pct(readable, sites), native, minimal, with_business: withBusiness, with_hours: withHours,
     ai_access_checked: checkedAccess, blocking_ai: blockingAi, blocking_ai_percent: pct(blockingAi, checkedAccess),
     products, pages, upcoming_events: upcomingEvents, new_sites: newSites, searches,
+    visits_sent: visitsSent, click_through_percent: searches ? Math.round(visitsSent / searches * 1000) / 10 : null,
     categories: categories.slice(0, 12), cities, top_queries: topQueries, top_sites: topSites, languages
   }
 
@@ -100,7 +105,7 @@ async function main() {
     `${fmt(native)} site${native === 1 ? "" : "s"} publish their own LAWP file${delta(native, p.native)}, which lets agents take actions on them directly.`,
     checkedAccess ? `Of ${fmt(checkedAccess)} sites whose robots.txt was checked, ${data.blocking_ai_percent ?? "—"}% block at least one AI bot${delta(data.blocking_ai_percent, p.blocking_ai_percent, " points")}.` : "",
     `Agents can find ${fmt(products)} products with prices, ${fmt(pages)} indexed pages, ${fmt(upcomingEvents)} upcoming events and ${fmt(withBusiness)} businesses with an address${withHours ? ` (${fmt(withHours)} with opening hours)` : ""}.`,
-    searches ? `Agents ran ${fmt(searches)} searches this week${delta(searches, p.searches)}.` : ""
+    searches ? `Agents ran ${fmt(searches)} searches this week${delta(searches, p.searches)} and sent ${fmt(visitsSent)} visits to websites.` : ""
   ].filter(Boolean)
   const title = `State of the AI web — week of ${new Date(week + "T00:00:00Z").toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" })}`
   const summary = lines.join(" ")
