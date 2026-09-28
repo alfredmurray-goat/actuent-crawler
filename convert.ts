@@ -14,6 +14,9 @@ import { promises as dns } from "dns"
 //      and keywords (enrichLAWP, ~1/3 of the tokens); rules found nothing → full LLM conversion.
 //   3. Booking links, llms.txt pages, cleaned page text and schema.org business details added.
 
+// Domains the LLM described as error pages, placeholders or bare API hosts (this run).
+export const notASite = new Set<string>()
+
 export type Converted = { lawp: any, conversion: "llm" | "heuristic", from: string }
 
 const usable = (lawp: any) => Array.isArray(lawp?.actions) && lawp.actions.length > 0
@@ -44,6 +47,9 @@ export async function convertSite(
       if (usable(full)) out = { lawp: full, conversion: "llm", from: "homepage" }
     }
   }
+  // The LLM can tell when a "site" is an error page, a placeholder or a bare API host; those
+  // aren't results (the caller flags them).
+  if (out && NOT_A_SITE.test(String(out.lawp.pages?.["/"]?.content || ""))) { notASite.add(domain); return null }
   if (!out && usable(rules)) out = { lawp: rules, conversion: "heuristic", from }
   if (!out) return null
 
@@ -81,6 +87,7 @@ export function cleanTitles(pages: Record<string, any>): Record<string, any> {
   return out
 }
 
+const NOT_A_SITE = /\b(error (page|state|message)|server error|not a functional (website|site)|placeholder page|parked domain|default (web ?page|server page)|under construction|no (actual|real) content|api endpoint|technical (endpoint|domain)|used for (tracking|analytics|advertising|serving ads))\b/i
 const PARKED = /\b(this domain (is|may be) for sale|buy this domain|domain for sale|parked (free|domain)|is parked|domain has expired|renew (this|your) domain)\b/i
 const ERROR_PAGE = /\b(404|page not found|access denied|forbidden|just a moment|checking your browser|attention required|enable javascript and cookies|account suspended|bandwidth limit exceeded)\b/i
 export function isParkedOrError(text: string): boolean {
