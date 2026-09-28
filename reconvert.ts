@@ -29,7 +29,12 @@ async function backlog(size: number, withLlm: boolean): Promise<Row[]> {
   const url = withLlm
     ? `${SUPABASE_URL}/rest/v1/lawp_sites?select=domain,conversion&${notYet}&and=(or(actions.eq.%5B%5D,conversion.eq.heuristic),or(category.is.null,category.not.in.(adult,gambling)))&order=popularity_rank.asc.nullslast,updated_at.asc&limit=${size}`
     : `${SUPABASE_URL}/rest/v1/lawp_sites?select=domain,conversion&${notYet}&actions=eq.%5B%5D&order=updated_at.asc&limit=${size}`
-  const r = await fetch(url, { headers: SUPABASE_HEADERS })
+  let r = await fetch(url, { headers: SUPABASE_HEADERS })
+  // A busy database can time out on the "popular first" query: fall back to the simple one.
+  if (!r.ok && withLlm) {
+    console.log(`Backlog query timed out (${r.status}); using the simple one`)
+    r = await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?select=domain,conversion&${notYet}&actions=eq.%5B%5D&order=updated_at.asc&limit=${size}`, { headers: SUPABASE_HEADERS })
+  }
   if (!r.ok) throw new Error(`Could not load the backlog: ${r.status} ${await r.text()}`)
   return (await r.json()).map((row: any) => ({ domain: row.domain, conversion: row.conversion ?? null }))
 }
