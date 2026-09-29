@@ -15,6 +15,13 @@ async function get(path: string) {
 }
 
 async function main() {
+// Database size, biggest tables first (db_size(), list_ten.sql): SIZES=1.
+if (process.env.SIZES === "1") {
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/db_size`, { method: "POST", headers: { ...SUPABASE_HEADERS, "Content-Type": "application/json" }, body: "{}", signal: AbortSignal.timeout(30000) }).catch(() => null)
+  const rows: any[] = r?.ok ? await r.json() : []
+  for (const x of rows.sort((a, b) => Number(b.bytes) - Number(a.bytes)).slice(0, 25)) console.log(`size ${String(x.name).padEnd(40)} ${(Number(x.bytes) / 1048576).toFixed(1)} MB`)
+  if (!rows.length) console.log(`size: db_size() failed (${r?.status})`)
+}
 // How long the search functions take for a few searches (QUERIES, separated by "|").
 for (const q of (process.env.QUERIES || "").split("|").map(x => x.trim()).filter(Boolean).slice(0, 10)) {
   for (const fn of ["search_lawp_sites", "search_lawp_pages"]) {

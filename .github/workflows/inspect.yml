@@ -8,6 +8,9 @@ on:
       queries:
         description: 'Searches to time, separated by |'
         required: false
+      sizes:
+        description: 'Show database table sizes (1 = yes)'
+        required: false
 jobs:
   inspect:
     runs-on: ubuntu-latest
@@ -23,3 +26,4 @@ jobs:
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
           DOMAINS: ${{ inputs.domains }}
           QUERIES: ${{ inputs.queries }}
+          SIZES: ${{ inputs.sizes }}
