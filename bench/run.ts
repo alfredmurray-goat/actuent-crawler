@@ -35,16 +35,19 @@ async function main() {
   const rows: any[] = []
   for (const c of cases) {
     const started = Date.now()
-    let results: any[] = [], error = ""
+    let results: any[] = [], error = "", dbMs: number | null = null
     try {
       const res = await fetch(`${API}/api/search?q=${encodeURIComponent(c.q)}&bench=1`, { headers: { "User-Agent": "Actuent-Benchmark/1.0", "Cache-Control": "no-cache" }, signal: AbortSignal.timeout(60000) })
       results = res.ok ? ((await res.json()).results || []) : []
+      // The database part of the time (Server-Timing "plain"), so slowness and wrong answers are told apart.
+      const plain = (res.headers.get("server-timing") || "").match(/plain;dur=(\d+)/)
+      dbMs = plain ? Number(plain[1]) : null
       if (!res.ok) error = `HTTP ${res.status}`
     } catch (e: any) { error = String(e?.message || e) }
     const ms = Date.now() - started
     const rank = results.slice(0, 10).findIndex(r => right(c, r)) + 1
-    rows.push({ q: c.q, kind: kind(c), rank: rank || null, ms, top: results.slice(0, 3).map(r => r.domain), ...(error ? { error } : {}) })
-    console.log(`${rank === 1 ? "✓ " : rank ? `${rank} ` : "✗ "} ${String(ms).padStart(6)}ms  ${c.q}  →  ${results.slice(0, 3).map(r => r.domain).join(", ") || error || "(nothing)"}`)
+    rows.push({ q: c.q, kind: kind(c), rank: rank || null, ms, db_ms: dbMs, top: results.slice(0, 3).map(r => r.domain), ...(error ? { error } : {}) })
+    console.log(`${rank === 1 ? "✓ " : rank ? `${rank} ` : "✗ "} ${String(ms).padStart(6)}ms ${dbMs != null ? `(db ${String(dbMs).padStart(5)})` : "          "}  ${c.q}  →  ${results.slice(0, 3).map(r => r.domain).join(", ") || error || "(nothing)"}`)
     await new Promise(r => setTimeout(r, 3500)) // stay under the free rate limit
   }
   // The first 41 queries are the original set: their numbers stay comparable across runs as
@@ -56,7 +59,8 @@ async function main() {
       queries: list.length, hit_at_1: Math.round(list.filter(r => r.rank === 1).length / n * 1000) / 10,
       hit_at_5: Math.round(list.filter(r => r.rank && r.rank <= 5).length / n * 1000) / 10,
       mrr: Math.round(list.reduce((s, r) => s + (r.rank ? 1 / r.rank : 0), 0) / n * 1000) / 1000,
-      p50_ms: times[Math.floor(list.length * 0.5)] || 0, p95_ms: times[Math.min(list.length - 1, Math.floor(list.length * 0.95))] || 0
+      p50_ms: times[Math.floor(list.length * 0.5)] || 0, p95_ms: times[Math.min(list.length - 1, Math.floor(list.length * 0.95))] || 0,
+      db_p50_ms: (() => { const db = list.map(r => r.db_ms).filter((x: any) => x != null).sort((a, b) => a - b); return db[Math.floor(db.length * 0.5)] ?? null })()
     }
   }
   const networkErrors = rows.filter(r => /fetch failed|ENOTFOUND|ECONNRESET|EAI_AGAIN/i.test(r.error || ""))
@@ -74,7 +78,7 @@ async function main() {
   if (KEY) {
     const r = await fetch(`${SUPABASE_URL}/rest/v1/search_benchmarks`, {
       method: "POST", headers: { "apikey": KEY, "Authorization": `Bearer ${KEY}`, "Content-Type": "application/json", "Prefer": "return=minimal" },
-      body: JSON.stringify({ ...summary, details: { original_41: original, by_kind: byKind, rows } })
+      body: JSON.stringify({ ...(({ db_p50_ms, ...cols }) => cols)(summary), details: { original_41: original, by_kind: byKind, db_p50_ms: summary.db_p50_ms, rows } })
     })
     console.log(r.ok ? "Saved to search_benchmarks" : `Not saved: ${r.status} ${await r.text()}`)
   }

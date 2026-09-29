@@ -775,5 +775,277 @@
       "fresha.com",
       "planway.com"
     ]
+  },
+  {
+    "q": "localilabs",
+    "domains": [
+      "localilabs.com"
+    ]
+  },
+  {
+    "q": "rejn",
+    "domains": [
+      "rejn.app"
+    ]
+  },
+  {
+    "q": "notion",
+    "domains": [
+      "notion.so",
+      "notion.com"
+    ]
+  },
+  {
+    "q": "figma",
+    "domains": [
+      "figma.com"
+    ]
+  },
+  {
+    "q": "canva",
+    "domains": [
+      "canva.com"
+    ]
+  },
+  {
+    "q": "notion vs obsidian",
+    "domains": [
+      "notion.so",
+      "notion.com",
+      "obsidian.md"
+    ]
+  },
+  {
+    "q": "stripe vs paypal",
+    "domains": [
+      "stripe.com",
+      "paypal.com"
+    ]
+  },
+  {
+    "q": "does basecamp have a free plan",
+    "domains": [
+      "basecamp.com"
+    ]
+  },
+  {
+    "q": "is figma free",
+    "domains": [
+      "figma.com"
+    ]
+  },
+  {
+    "q": "spotfy",
+    "domains": [
+      "spotify.com"
+    ]
+  },
+  {
+    "q": "quikbooks",
+    "domains": [
+      "quickbooks.intuit.com",
+      "quickbooks.com",
+      "intuit.com"
+    ]
+  },
+  {
+    "q": "shoes copenhagen",
+    "tld": ".dk"
+  },
+  {
+    "q": "bakery copenhagen",
+    "tld": ".dk",
+    "category": "bakery"
+  },
+  {
+    "q": "vegan restaurant copenhagen",
+    "tld": ".dk",
+    "category": "restaurant"
+  },
+  {
+    "q": "musée paris",
+    "domains": [
+      "louvre.fr",
+      "musee-orsay.fr",
+      "centrepompidou.fr",
+      "petitpalais.paris.fr",
+      "mnhn.fr",
+      "museeduquaibranly.fr",
+      "museerodinparis.fr",
+      "marmottan.fr"
+    ],
+    "language": "fr"
+  },
+  {
+    "q": "museum amsterdam",
+    "domains": [
+      "rijksmuseum.nl",
+      "vangoghmuseum.nl",
+      "stedelijk.nl",
+      "amsterdammuseum.nl",
+      "rembrandthuis.nl",
+      "annefrank.org"
+    ]
+  },
+  {
+    "q": "fahrradladen berlin",
+    "tld": ".de",
+    "language": "de"
+  },
+  {
+    "q": "electronics store denmark",
+    "domains": [
+      "elgiganten.dk",
+      "power.dk",
+      "proshop.dk",
+      "komplett.dk",
+      "computersalg.dk",
+      "coolshop.dk"
+    ]
+  },
+  {
+    "q": "invoicing software",
+    "domains": [
+      "freshbooks.com",
+      "quickbooks.intuit.com",
+      "quickbooks.com",
+      "xero.com",
+      "zoho.com",
+      "invoiceninja.com",
+      "waveapps.com",
+      "bonsai.io"
+    ]
+  },
+  {
+    "q": "crm for small business",
+    "domains": [
+      "hubspot.com",
+      "pipedrive.com",
+      "zoho.com",
+      "salesforce.com",
+      "freshworks.com",
+      "monday.com",
+      "copper.com",
+      "insightly.com"
+    ]
+  },
+  {
+    "q": "cloud storage",
+    "domains": [
+      "dropbox.com",
+      "box.com",
+      "drive.google.com",
+      "google.com",
+      "icloud.com",
+      "onedrive.live.com",
+      "microsoft.com",
+      "pcloud.com",
+      "sync.com",
+      "mega.io"
+    ]
+  },
+  {
+    "q": "ai assistant",
+    "domains": [
+      "chatgpt.com",
+      "openai.com",
+      "claude.ai",
+      "anthropic.com",
+      "gemini.google.com",
+      "perplexity.ai",
+      "copilot.microsoft.com",
+      "microsoft.com"
+    ]
+  },
+  {
+    "q": "photo editing",
+    "domains": [
+      "adobe.com",
+      "canva.com",
+      "pixlr.com",
+      "photopea.com",
+      "affinity.serif.com",
+      "serif.com",
+      "fotor.com",
+      "picsart.com"
+    ]
+  },
+  {
+    "q": "stock photos",
+    "domains": [
+      "unsplash.com",
+      "pexels.com",
+      "shutterstock.com",
+      "gettyimages.com",
+      "istockphoto.com",
+      "pixabay.com",
+      "adobe.com"
+    ]
+  },
+  {
+    "q": "cheap hotels paris",
+    "domains": [
+      "booking.com",
+      "hotels.com",
+      "expedia.com",
+      "agoda.com",
+      "trivago.com",
+      "airbnb.com",
+      "kayak.com"
+    ]
+  },
+  {
+    "q": "train tickets uk",
+    "domains": [
+      "thetrainline.com",
+      "trainline.com",
+      "nationalrail.co.uk",
+      "lner.co.uk",
+      "gwr.com",
+      "avantiwestcoast.co.uk",
+      "raileasy.co.uk"
+    ]
+  },
+  {
+    "q": "billige flybilletter",
+    "domains": [
+      "momondo.dk",
+      "skyscanner.dk",
+      "skyscanner.net",
+      "kayak.dk",
+      "sas.dk",
+      "flysas.com",
+      "norwegian.com",
+      "ryanair.com"
+    ],
+    "language": "da"
+  },
+  {
+    "q": "zapatillas running",
+    "domains": [
+      "nike.com",
+      "adidas.es",
+      "adidas.com",
+      "asics.com",
+      "decathlon.es",
+      "runnerinn.com",
+      "zalando.es",
+      "hoka.com",
+      "newbalance.com",
+      "on.com"
+    ],
+    "language": "es"
+  },
+  {
+    "q": "password manager free",
+    "domains": [
+      "bitwarden.com",
+      "proton.me",
+      "keepassxc.org",
+      "nordpass.com",
+      "1password.com",
+      "dashlane.com",
+      "lastpass.com"
+    ]
   }
 ]
