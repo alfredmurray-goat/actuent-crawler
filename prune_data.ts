@@ -17,6 +17,10 @@ const RULES: { table: string, filter: string, why: string }[] = [
   { table: "action_log", filter: `created_at=lt.${days(365)}`, why: "action log: 12 months" },
   { table: "crawl_queue", filter: `done_at=lt.${days(30)}`, why: "finished crawl requests: 30 days" },
   { table: "used_tokens", filter: `used_at=lt.${days(30)}`, why: "used sign-in links: 30 days" },
+  { table: "search_cache", filter: `expires_at=lt.${days(0)}`, why: "expired cached searches" },
+  { table: "query_reformulations", filter: `updated_at=lt.${days(180)}`, why: "rewritten searches: 180 days" },
+  { table: "name_websites", filter: `checked_at=lt.${days(90)}`, why: "name lookups: 90 days (looked up again when needed)" },
+  { table: "search_misses", filter: `checked_at=lt.${days(60)}`, why: "search misses: 60 days" },
   { table: "lawp_events", filter: `start_date=lt.${days(60)}`, why: "past events: 60 days after they start" }
 ]
 
