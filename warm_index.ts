@@ -1,12 +1,12 @@
 import { SUPABASE_URL, SUPABASE_HEADERS } from "./shared"
 
-// Hourly: runs the most common searches straight against the database search functions, so the
+// Every 2 hours: runs the most common searches straight against the database search functions, so the
 // parts of the search index they need stay in memory. The free database can't keep the whole index
 // in memory, and a search's first run in a while takes ~5 s; after this, people get the fast run.
 // Also logs how long the database took, which shows whether the database is the slow part.
 
 if (!process.env.SUPABASE_SERVICE_KEY) { console.error("Missing SUPABASE_SERVICE_KEY"); process.exit(1) }
-const LIMIT = parseInt(process.env.WARM_INDEX_LIMIT || "200")
+const LIMIT = parseInt(process.env.WARM_INDEX_LIMIT || "80")
 const JSON_HEADERS = { ...SUPABASE_HEADERS, "Content-Type": "application/json" }
 
 // Always warm, even before anyone has searched them this week.
@@ -38,6 +38,9 @@ async function timed(fn: string, q: string): Promise<number> {
 
 async function main() {
   const start = Date.now()
+  // When searches were slow in the last hour (speed_alert.ts), warming would only add load: skip.
+  const flag = await fetch(`${SUPABASE_URL}/rest/v1/crawler_state?id=eq.search_slow_until&select=value`, { headers: SUPABASE_HEADERS }).then(r => r.ok ? r.json() : []).catch(() => [])
+  if ((Number(flag?.[0]?.value) || 0) * 60_000 > Date.now()) { console.log("Searches are slow right now: skipping the warm-up this time."); return }
   const queries = [...new Set([...(await topSearches()), ...STAPLES])].slice(0, LIMIT)
   const times: number[] = []
   let index = 0

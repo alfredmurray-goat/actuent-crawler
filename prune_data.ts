@@ -24,6 +24,26 @@ const RULES: { table: string, filter: string, why: string }[] = [
   { table: "lawp_events", filter: `start_date=lt.${days(60)}`, why: "past events: 60 days after they start" }
 ]
 
+// Hidden sites (parked, unreachable, duplicates) never show up in search: their page text and
+// actions are cleared (the row stays, so they aren't crawled again as new), which frees space.
+async function emptyHidden(): Promise<void> {
+  if (DRY) { console.log("hidden sites: skipped (dry run)"); return }
+  let total = 0
+  for (let i = 0; i < 50; i++) {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?select=domain&status=not.is.null&pages=neq.%7B%7D&limit=500`, { headers: SUPABASE_HEADERS }).catch(() => null)
+    const rows: any[] = r?.ok ? await r.json() : []
+    if (!rows.length) break
+    const list = encodeURIComponent(rows.map(x => `"${x.domain}"`).join(","))
+    const u = await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?domain=in.(${list})`, {
+      method: "PATCH", headers: { ...SUPABASE_HEADERS, "Content-Type": "application/json", "Prefer": "return=minimal" },
+      body: JSON.stringify({ pages: {}, actions: [] })
+    }).catch(() => null)
+    if (!u?.ok) { console.log(`hidden sites: update failed ${u?.status}`); break }
+    total += rows.length
+  }
+  console.log(`hidden sites: page text cleared on ${total}`)
+}
+
 async function countRows(table: string, filter: string): Promise<number | null> {
   const r = await fetch(`${SUPABASE_URL}/rest/v1/${table}?select=*&${filter}`, { method: "HEAD", headers: { ...SUPABASE_HEADERS, "Prefer": "count=exact", "Range": "0-0" } }).catch(() => null)
   const total = r?.headers.get("content-range")?.split("/")[1]
@@ -31,6 +51,7 @@ async function countRows(table: string, filter: string): Promise<number | null> 
 }
 
 async function main() {
+  await emptyHidden()
   for (const { table, filter, why } of RULES) {
     const n = await countRows(table, filter)
     if (n === null) { console.log(`${table}: not available, skipped`); continue }
