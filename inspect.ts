@@ -23,6 +23,9 @@ for (const q of (process.env.QUERIES || "").split("|").map(x => x.trim()).filter
     const body = r.ok ? await r.json() : (await r.text()).slice(0, 160)
     console.log(`${fn}("${q}"): ${r.status} in ${Date.now() - t}ms → ${Array.isArray(body) ? `${body.length} rows: ${body.slice(0, 5).map((x: any) => x.domain).join(", ")}` : body}`)
   }
+  const t = Date.now()
+  const top = await get(`lawp_sites?select=domain&status=is.null&popularity_rank=lte.20000&search_text=plfts(english).${encodeURIComponent(q)}&order=popularity_rank.asc&limit=40`)
+  console.log(`top sites ("${q}"): ${top.status} in ${Date.now() - t}ms → ${Array.isArray(top.body) ? `${top.body.length} rows: ${top.body.slice(0, 8).map((x: any) => x.domain).join(", ")}` : top.body}`)
 }
 // Which of the newer tables exist (each list_*.sql adds some).
 for (const table of ["search_cache", "name_websites", "query_reformulations", "search_misses", "search_vocab", "crawl_queue"]) {
