@@ -15,6 +15,12 @@ async function get(path: string) {
 }
 
 async function main() {
+// PING=1: 10 tiny requests one after another (connection reused), to see how far away the database is.
+if (process.env.PING === "1") {
+  const times: number[] = []
+  for (let i = 0; i < 11; i++) { const t = Date.now(); await get("crawler_state?select=id&limit=1"); times.push(Date.now() - t) }
+  console.log(`ping: first ${times[0]} ms (new connection), then ${times.slice(1).join(", ")} ms; runner region: ${process.env.RUNNER_REGION || "GitHub-hosted (US)"}`)
+}
 // Database size, biggest tables first (db_size(), list_ten.sql): SIZES=1.
 if (process.env.SIZES === "1") {
   const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/db_size`, { method: "POST", headers: { ...SUPABASE_HEADERS, "Content-Type": "application/json" }, body: "{}", signal: AbortSignal.timeout(30000) }).catch(() => null)

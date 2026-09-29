@@ -11,6 +11,9 @@ on:
       sizes:
         description: 'Show database table sizes (1 = yes)'
         required: false
+      ping:
+        description: 'Time 10 tiny requests (1 = yes)'
+        required: false
 jobs:
   inspect:
     runs-on: ubuntu-latest
@@ -27,3 +30,4 @@ jobs:
           DOMAINS: ${{ inputs.domains }}
           QUERIES: ${{ inputs.queries }}
           SIZES: ${{ inputs.sizes }}
+          PING: ${{ inputs.ping }}
