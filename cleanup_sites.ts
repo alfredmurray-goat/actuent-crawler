@@ -48,8 +48,23 @@ async function indexed(domains: string[]): Promise<Set<string>> {
   return new Set(r.ok ? (await r.json()).map((x: any) => bare(x.domain)) : [])
 }
 
+// Rows saved with a path or trailing slash ("localilabs.com/") are copies of the real site: hidden
+// from search as duplicates of it (kept, not deleted).
+async function slashDuplicates(): Promise<number> {
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?select=domain&domain=like.*%2F*&status=is.null&limit=1000`, { headers: HEADERS })
+  const rows: any[] = r.ok ? await r.json() : []
+  for (const { domain } of rows) {
+    await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?domain=eq.${encodeURIComponent(domain)}`, {
+      method: "PATCH", headers: { ...HEADERS, "Content-Type": "application/json", "Prefer": "return=minimal" },
+      body: JSON.stringify({ status: "duplicate", duplicate_of: String(domain).split("/")[0] })
+    }).catch(() => {})
+  }
+  return rows.length
+}
+
 async function main() {
   const start = Date.now()
+  console.log(`${await slashDuplicates()} rows with a slash in the domain hidden as duplicates`)
   let checked = 0, parked = 0, duplicates = 0
   while (Date.now() - start < TIME_BUDGET_MS) {
     const r = await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?select=domain,name,pages,owner_key,native&checked_at=is.null&order=domain.asc&limit=300`, { headers: HEADERS })
