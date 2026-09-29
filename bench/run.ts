@@ -36,21 +36,32 @@ async function main() {
     console.log(`${rank === 1 ? "✓ " : rank ? `${rank} ` : "✗ "} ${String(ms).padStart(6)}ms  ${c.q}  →  ${results.slice(0, 3).map(r => r.domain).join(", ") || error || "(nothing)"}`)
     await new Promise(r => setTimeout(r, 3500)) // stay under the free rate limit
   }
-  const n = rows.length
-  const hit1 = rows.filter(r => r.rank === 1).length / n
-  const hit5 = rows.filter(r => r.rank && r.rank <= 5).length / n
-  const mrr = rows.reduce((s, r) => s + (r.rank ? 1 / r.rank : 0), 0) / n
-  const times = rows.map(r => r.ms).sort((a, b) => a - b)
-  const p50 = times[Math.floor(n * 0.5)], p95 = times[Math.min(n - 1, Math.floor(n * 0.95))]
-  const summary = { queries: n, hit_at_1: Math.round(hit1 * 1000) / 10, hit_at_5: Math.round(hit5 * 1000) / 10, mrr: Math.round(mrr * 1000) / 1000, p50_ms: p50, p95_ms: p95 }
-  console.log(JSON.stringify(summary))
+  // The first 41 queries are the original set: their numbers stay comparable across runs as
+  // queries are added. Network failures on the benchmark's side (not Actuent's) don't count.
+  const stats = (list: any[]) => {
+    const n = list.length || 1
+    const times = list.map(r => r.ms).sort((a, b) => a - b)
+    return {
+      queries: list.length, hit_at_1: Math.round(list.filter(r => r.rank === 1).length / n * 1000) / 10,
+      hit_at_5: Math.round(list.filter(r => r.rank && r.rank <= 5).length / n * 1000) / 10,
+      mrr: Math.round(list.reduce((s, r) => s + (r.rank ? 1 / r.rank : 0), 0) / n * 1000) / 1000,
+      p50_ms: times[Math.floor(list.length * 0.5)] || 0, p95_ms: times[Math.min(list.length - 1, Math.floor(list.length * 0.95))] || 0
+    }
+  }
+  const networkErrors = rows.filter(r => /fetch failed|ENOTFOUND|ECONNRESET|EAI_AGAIN/i.test(r.error || ""))
+  const counted = rows.filter(r => !networkErrors.includes(r))
+  const summary = stats(counted)
+  const original = stats(counted.filter(r => cases.findIndex(c => c.q === r.q) < 41))
+  const p50 = summary.p50_ms, p95 = summary.p95_ms
+  console.log(JSON.stringify({ ...summary, original_41: original, network_errors: networkErrors.length }))
+  if (networkErrors.length > rows.length * 0.1) { console.log(`✗ ${networkErrors.length} requests failed on the benchmark's side (no connection): this run isn't valid.`); process.exitCode = 1; return }
   if (process.env.GITHUB_STEP_SUMMARY) {
-    fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `## Search benchmark\n\n| hit@1 | hit@5 | MRR | p50 | p95 |\n|---|---|---|---|---|\n| ${summary.hit_at_1}% | ${summary.hit_at_5}% | ${summary.mrr} | ${p50} ms | ${p95} ms |\n\n| Query | Rank | Time | Top 3 |\n|---|---|---|---|\n${rows.map(r => `| ${r.q} | ${r.rank ?? "✗"} | ${r.ms} ms | ${r.top.join(", ")} |`).join("\n")}\n`)
+    fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `## Search benchmark\n\n| hit@1 | hit@5 | MRR | p50 | p95 |\n|---|---|---|---|---|\n| ${summary.hit_at_1}% | ${summary.hit_at_5}% | ${summary.mrr} | ${p50} ms | ${p95} ms |\n\nOriginal 41 queries: hit@1 ${original.hit_at_1}%, hit@5 ${original.hit_at_5}%, MRR ${original.mrr}\n\n| Query | Rank | Time | Top 3 |\n|---|---|---|---|\n${rows.map(r => `| ${r.q} | ${r.rank ?? "✗"} | ${r.ms} ms | ${r.top.join(", ")} |`).join("\n")}\n`)
   }
   if (KEY) {
     const r = await fetch(`${SUPABASE_URL}/rest/v1/search_benchmarks`, {
       method: "POST", headers: { "apikey": KEY, "Authorization": `Bearer ${KEY}`, "Content-Type": "application/json", "Prefer": "return=minimal" },
-      body: JSON.stringify({ ...summary, details: rows })
+      body: JSON.stringify({ ...summary, details: { original_41: original, rows } })
     })
     console.log(r.ok ? "Saved to search_benchmarks" : `Not saved: ${r.status} ${await r.text()}`)
   }
