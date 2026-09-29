@@ -15,6 +15,15 @@ async function get(path: string) {
 }
 
 async function main() {
+// How long the search functions take for a few searches (QUERIES, separated by "|").
+for (const q of (process.env.QUERIES || "").split("|").map(x => x.trim()).filter(Boolean).slice(0, 10)) {
+  for (const fn of ["search_lawp_sites", "search_lawp_pages"]) {
+    const t = Date.now()
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${fn}`, { method: "POST", headers: { ...SUPABASE_HEADERS, "Content-Type": "application/json" }, body: JSON.stringify({ q, max_results: 50 }), signal: AbortSignal.timeout(30000) }).catch(e => ({ ok: false, status: String(e?.name), json: async () => [], text: async () => "" }) as any)
+    const body = r.ok ? await r.json() : (await r.text()).slice(0, 160)
+    console.log(`${fn}("${q}"): ${r.status} in ${Date.now() - t}ms → ${Array.isArray(body) ? `${body.length} rows: ${body.slice(0, 5).map((x: any) => x.domain).join(", ")}` : body}`)
+  }
+}
 // Which of the newer tables exist (each list_*.sql adds some).
 for (const table of ["search_cache", "name_websites", "query_reformulations", "search_misses", "search_vocab", "crawl_queue"]) {
   const t = await get(`${table}?select=*&limit=0`)

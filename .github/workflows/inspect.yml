@@ -4,7 +4,10 @@ on:
     inputs:
       domains:
         description: 'Domains, separated by spaces'
-        required: true
+        required: false
+      queries:
+        description: 'Searches to time, separated by |'
+        required: false
 jobs:
   inspect:
     runs-on: ubuntu-latest
@@ -19,3 +22,4 @@ jobs:
         env:
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
           DOMAINS: ${{ inputs.domains }}
+          QUERIES: ${{ inputs.queries }}
