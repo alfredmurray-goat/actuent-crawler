@@ -37,13 +37,15 @@ async function queue(): Promise<{ domain: string, score: number, overdue: number
     const chunk = wanted.slice(i, i + 100)
     const list = encodeURIComponent(chunk.map(([d]) => `"${d}"`).join(","))
     // Age counts from the last check, not only the last change (refreshed_at: list_eight.sql).
-    let res = await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?select=domain,updated_at,refreshed_at&domain=in.(${list})`, { headers: SUPABASE_HEADERS })
+    let res = await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?select=domain,updated_at,refreshed_at,category&domain=in.(${list})`, { headers: SUPABASE_HEADERS })
     if (!res.ok) res = await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?select=domain,updated_at&domain=in.(${list})`, { headers: SUPABASE_HEADERS })
     const rows: any[] = res.ok ? await res.json() : []
     const updated = new Map(rows.map(r => [r.domain, Math.max(Date.parse(r.updated_at) || 0, Date.parse(r.refreshed_at) || 0)]))
+    // News and events sites change daily: refreshed every day when people search for them.
+    const timely = new Set(rows.filter(r => r.category === "news_media" || r.category === "events").map(r => r.domain))
     for (const [domain, score] of chunk) {
       const ageDays = updated.has(domain) ? (Date.now() - updated.get(domain)!) / 86400000 : Infinity
-      const overdue = ageDays / maxAgeDays(score)!
+      const overdue = ageDays / (timely.has(domain) ? 1 : maxAgeDays(score)!)
       if (overdue >= 1) out.push({ domain, score, overdue })
     }
   }

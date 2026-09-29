@@ -44,7 +44,21 @@ const CITIES: [string, number, number, string][] = [
   ["Chicago", 41.8781, -87.6298, "us"], ["Boston", 42.3601, -71.0589, "us"], ["Seattle", 47.6062, -122.3321, "us"], ["Austin", 30.2672, -97.7431, "us"],
   ["Denver", 39.7392, -104.9903, "us"], ["Portland", 45.5152, -122.6784, "us"], ["Washington", 38.9072, -77.0369, "us"], ["Miami", 25.7617, -80.1918, "us"],
   ["Toronto", 43.6532, -79.3832, "ca"], ["Vancouver", 49.2827, -123.1207, "ca"], ["Montreal", 45.5019, -73.5674, "ca"], ["Sydney", -33.8688, 151.2093, "au"],
-  ["Melbourne", -37.8136, 144.9631, "au"], ["Brisbane", -27.4698, 153.0251, "au"], ["Auckland", -36.8485, 174.7633, "nz"], ["Wellington", -41.2865, 174.7762, "nz"]
+  ["Melbourne", -37.8136, 144.9631, "au"], ["Brisbane", -27.4698, 153.0251, "au"], ["Auckland", -36.8485, 174.7633, "nz"], ["Wellington", -41.2865, 174.7762, "nz"],
+  // More European and North American cities (2026-09-29).
+  ["Aalborg", 57.0488, 9.9217, "dk"], ["Esbjerg", 55.4765, 8.4594, "dk"], ["Roskilde", 55.6419, 12.0878, "dk"], ["Uppsala", 59.8586, 17.6389, "se"],
+  ["Trondheim", 63.4305, 10.3951, "no"], ["Stavanger", 58.97, 5.7331, "no"], ["Tampere", 61.4978, 23.761, "fi"], ["Turku", 60.4518, 22.2666, "fi"],
+  ["Tallinn", 59.437, 24.7536, "ee"], ["Riga", 56.9496, 24.1052, "lv"], ["Vilnius", 54.6872, 25.2797, "lt"], ["Gdansk", 54.352, 18.6466, "pl"],
+  ["Wroclaw", 51.1079, 17.0385, "pl"], ["Brno", 49.1951, 16.6068, "cz"], ["Bratislava", 48.1486, 17.1077, "sk"], ["Ljubljana", 46.0569, 14.5058, "si"],
+  ["Zagreb", 45.815, 15.9819, "hr"], ["Belgrade", 44.7866, 20.4489, "rs"], ["Bucharest", 44.4268, 26.1025, "ro"], ["Sofia", 42.6977, 23.3219, "bg"],
+  ["Thessaloniki", 40.6401, 22.9444, "gr"], ["Nice", 43.7102, 7.262, "fr"], ["Bordeaux", 44.8378, -0.5792, "fr"], ["Toulouse", 43.6047, 1.4442, "fr"],
+  ["Lille", 50.6292, 3.0573, "fr"], ["Nantes", 47.2184, -1.5536, "fr"], ["Seville", 37.3891, -5.9845, "es"], ["Malaga", 36.7213, -4.4214, "es"],
+  ["Bilbao", 43.263, -2.935, "es"], ["Turin", 45.0703, 7.6869, "it"], ["Bologna", 44.4949, 11.3426, "it"], ["Naples", 40.8518, 14.2681, "it"],
+  ["Venice", 45.4408, 12.3155, "it"], ["Stuttgart", 48.7758, 9.1829, "de"], ["Dusseldorf", 51.2277, 6.7735, "de"], ["Leipzig", 51.3397, 12.3731, "de"],
+  ["Dresden", 51.0504, 13.7373, "de"], ["Salzburg", 47.8095, 13.055, "at"], ["Basel", 47.5596, 7.5886, "ch"], ["Ghent", 51.0543, 3.7174, "be"],
+  ["The Hague", 52.0705, 4.3007, "nl"], ["Eindhoven", 51.4416, 5.4697, "nl"], ["Cork", 51.8985, -8.4756, "ie"], ["Cardiff", 51.4816, -3.1791, "gb"],
+  ["Belfast", 54.5973, -5.9301, "gb"], ["Brighton", 50.8225, -0.1372, "gb"], ["Philadelphia", 39.9526, -75.1652, "us"], ["San Diego", 32.7157, -117.1611, "us"],
+  ["Nashville", 36.1627, -86.7816, "us"], ["Atlanta", 33.749, -84.388, "us"], ["Minneapolis", 44.9778, -93.265, "us"], ["Ottawa", 45.4215, -75.6972, "ca"]
 ]
 
 // Hosts that aren't the business's own website.
@@ -92,6 +106,20 @@ export function cityName(osmCity: string | undefined, fallback: string): string 
   return LOCAL_CITY[base.toLowerCase()] || base
 }
 
+export function osmFeatures(t: Record<string, string>): string[] {
+  const yes = (v?: string) => v === "yes" || v === "only" || v === "limited"
+  const out: string[] = []
+  if (yes(t["diet:vegan"])) out.push("vegan")
+  if (yes(t["diet:vegetarian"]) || yes(t["diet:vegan"])) out.push("vegetarian")
+  if (yes(t["diet:gluten_free"])) out.push("gluten_free")
+  if (t.wheelchair === "yes") out.push("wheelchair")
+  if (t.outdoor_seating === "yes") out.push("outdoor_seating")
+  if (/^(yes|wlan|wifi|free)$/.test(t.internet_access || "")) out.push("wifi")
+  if (t.dog === "yes" || t.dog === "leashed") out.push("dogs")
+  if (t.changing_table === "yes" || t.kids_area === "yes" || t["kids_area:indoor"] === "yes") out.push("kids")
+  return out
+}
+
 type Place = { domain: string, path: string, type: string, venue: boolean, business: Business }
 
 function kindOf(tags: Record<string, string>): string {
@@ -122,6 +150,9 @@ export function placeFrom(el: any, city: string, country: string): Place | null 
     address: { ...(street ? { street } : {}), city: cityName(tags["addr:city"], city), ...(tags["addr:postcode"] ? { postcode: tags["addr:postcode"] } : {}), country: (tags["addr:country"] || country).toUpperCase() },
     ...(typeof lat === "number" && typeof lon === "number" ? { geo: { lat, lon } } : {}),
     ...(osmHours(tags.opening_hours) ? { opening_hours: osmHours(tags.opening_hours) } : {}),
+    // Things people search for ("vegan", "dog friendly", "wheelchair"), and hotel stars.
+    ...(osmFeatures(tags).length ? { features: osmFeatures(tags) } : {}),
+    ...(/^[1-5](\.5)?S?$/.test(tags.stars || "") ? { stars: parseFloat(tags.stars) } : {}),
     // ODbL attribution: site pages show "© OpenStreetMap contributors" for these details.
     source: "openstreetmap"
   } as Business
@@ -222,8 +253,10 @@ async function addBusiness(p: Place) {
   })
 }
 
-async function city([name, lat, lon, country]: typeof CITIES[number]) {
+async function city([name, lat, lon, country]: typeof CITIES[number]): Promise<boolean | "empty"> {
   const elements = await overpass(lat, lon)
+  // No places at all means the map service didn't answer: try this city again next run.
+  if (!elements.length) { console.log(`${name}: no answer from OpenStreetMap — retrying next run`); return "empty" }
   const places = new Map<string, Place>()
   const perDomain = new Map<string, number>()
   for (const el of elements) {
@@ -263,7 +296,13 @@ async function main() {
   for (let n = 0; n < CITIES_PER_RUN && Date.now() - started < TIME_BUDGET_MS; n++) {
     const c = CITIES[at % CITIES.length]
     const finished = await city(c)
-    if (!finished) break
+    if (finished === "empty") {
+      // At most two retries per city, then move on (it may really have nothing).
+      const retries = await state("osm_city_retries")
+      if (retries < 2) { await setState("osm_city_retries", retries + 1); break }
+      await setState("osm_city_retries", 0)
+    } else if (!finished) break
+    else await setState("osm_city_retries", 0)
     at++
     await setState("osm_city", at)
     await new Promise(r => setTimeout(r, 10000)) // be gentle with the public Overpass server

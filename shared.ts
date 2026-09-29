@@ -148,6 +148,8 @@ export async function toLAWP(domain: string, content: string): Promise<any> {
   }
 }
 
+const CATEGORY_IDS = "restaurant, cafe, bar, bakery, food_delivery, hair_beauty, spa_wellness, fitness, health, dental, hotel, travel, events, museum_culture, shop_fashion, shop_beauty, shop_electronics, shop_home, shop_grocery, shop_sports, shop_kids, shop, software, developer, ai, news_media, education, finance, real_estate, legal, automotive, home_services, pets, jobs, nonprofit, government, social, games, streaming, adult, gambling"
+
 // Hybrid conversion: the rule-based converter already found the site's real actions (with real
 // URLs); the LLM only writes what rules can't: the name, an English summary naming the category,
 // and search keywords per action. About a third of the tokens of a full conversion, so the free
@@ -155,15 +157,18 @@ export async function toLAWP(domain: string, content: string): Promise<any> {
 export async function enrichLAWP(domain: string, rules: any, content: string): Promise<any | null> {
   const actions: any[] = Array.isArray(rules?.actions) ? rules.actions : []
   if (!actions.length) return null
-  const raw = await complete(`Website: ${domain}\nActions found on it: ${actions.map(a => `${a.id} (${a.name})`).join(", ")}\nContent: ${content.slice(0, 1400)}\n\nReply with JSON only, all text in English (translate if needed):\n{"name":"the brand or business name","language":"ISO 639-1 code of the site's own language","summary":"what the site offers and for whom, naming its category (e.g. 'accounting software', 'Italian restaurant in Lyon'), under 50 words","keywords":{"<action id>":["3-5 search words people would use for this action on this site"]}}`, 20000, 280)
+  const raw = await complete(`Website: ${domain}\nActions found on it: ${actions.map(a => `${a.id} (${a.name})`).join(", ")}\nContent: ${content.slice(0, 1400)}\n\nReply with JSON only, all text in English (translate if needed):\n{"name":"the brand or business name","language":"ISO 639-1 code of the site's own language","summary":"what the site offers and for whom, naming its category (e.g. 'accounting software', 'Italian restaurant in Lyon'), under 50 words","keywords":{"<action id>":["3-5 search words people would use for this action on this site"]},"category":"one of: ${CATEGORY_IDS}"}`, 20000, 300)
   const parsed = raw ? parseJson(raw) : null
   if (!parsed || typeof parsed.summary !== "string" || parsed.summary.length < 20) return null
   const language = typeof parsed.language === "string" && /^[a-z]{2}$/i.test(parsed.language) ? parsed.language.toLowerCase() : rules.language
   const name = typeof parsed.name === "string" && parsed.name.trim() && parsed.name.length <= 80 ? parsed.name.trim() : rules.name
   const home = rules.pages?.["/"] || {}
   const keywords = parsed.keywords && typeof parsed.keywords === "object" ? parsed.keywords : {}
+  // The LLM's category, when it's one of ours: far more reliable than counting words.
+  const category = typeof parsed.category === "string" && CATEGORY_IDS.split(", ").includes(parsed.category.trim()) ? parsed.category.trim() : undefined
   return {
     ...rules,
+    ...(category ? { category } : {}),
     name,
     language,
     pages: { ...rules.pages, "/": { ...home, title: language && language !== "en" ? name : (home.title || name), content: parsed.summary.trim().slice(0, 500) } },
@@ -178,7 +183,7 @@ export async function saveSite(site: any, hash?: string, conversion?: "native" |
   const base = { domain: site.domain, name: site.name, pages: site.pages, actions: site.actions, updated_at: new Date().toISOString() }
   const lang = site.language ? { language: site.language } : {}
   // Newest schema first; older databases lack native (lawp_actions.sql) or content_hash (groq_quota.sql).
-  const extras = { ...(site.business ? { business: site.business } : {}) }
+  const extras = { ...(site.business ? { business: site.business } : {}), ...(site.category ? { category: site.category } : {}) }
   const attempts = [
     { ...base, ...lang, native: !!site.native, ...(hash ? { content_hash: hash } : {}), ...(conversion ? { conversion } : {}), ...extras },
     { ...base, ...lang, native: !!site.native, ...(hash ? { content_hash: hash } : {}), ...(conversion ? { conversion } : {}) },

@@ -7,10 +7,10 @@ const MAX_PAGES = 8
 // Useful page types, matched as whole words in the page's last path segment. Higher = more
 // useful to an agent answering questions about the site; at most 2 pages per type are kept.
 const USEFUL: { type: string, points: number, words: string[] }[] = [
-  { type: "pricing", points: 10, words: ["pricing", "plans", "prices", "price", "rates", "tariffs", "fees"] },
-  { type: "offer", points: 8, words: ["menu", "menus", "services", "service", "treatments", "products", "shop", "store", "catalog", "catalogue", "collections"] },
+  { type: "pricing", points: 10, words: ["pricing", "plans", "prices", "price", "rates", "tariffs", "fees", "priser", "preise", "prix", "precios", "prezzi", "prijzen"] },
+  { type: "offer", points: 8, words: ["menu", "menus", "services", "service", "treatments", "products", "shop", "store", "catalog", "catalogue", "collections", "menukort", "speisekarte", "carte", "behandlinger", "ydelser", "leistungen"] },
   { type: "booking", points: 8, words: ["book", "booking", "bookings", "reserve", "reservation", "reservations", "appointment", "appointments"] },
-  { type: "contact", points: 7, words: ["contact", "locations", "location", "stores", "hours", "directions", "visit"] },
+  { type: "contact", points: 7, words: ["contact", "locations", "location", "stores", "hours", "opening-hours", "openinghours", "directions", "visit", "kontakt", "aabningstider", "abningstider", "oeffnungszeiten", "horaires"] },
   { type: "policies", points: 7, words: ["shipping", "delivery", "returns", "refunds", "refund", "warranty"] },
   { type: "about", points: 6, words: ["about", "company", "story", "team", "mission"] },
   { type: "help", points: 6, words: ["faq", "faqs", "help", "support", "features"] },

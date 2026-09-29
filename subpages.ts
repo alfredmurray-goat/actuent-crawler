@@ -11,9 +11,9 @@ import { fetchPublic } from "./safe-fetch"
 // the site's sitemap (robots.txt "Sitemap:" lines or /sitemap.xml) and ranked by how useful they
 // are to agents; sites without a sitemap fall back to /pricing, /about and /contact. No LLM, so it
 // never competes for LLM quota. Only English sites for now (LAWP text must be English).
-// Sites are marked with subpages_crawled_at so each is done once.
+// Sites are marked with subpages_crawled_at, and done again after 90 days (prices and menus change).
 
-const FALLBACK_PATHS = ["/pricing", "/about", "/contact"]
+const FALLBACK_PATHS = ["/pricing", "/menu", "/booking", "/opening-hours", "/about", "/contact"]
 const TOP = parseInt(process.env.SUBPAGE_TOP || "20000")
 const TIME_BUDGET_MS = parseInt(process.env.TIME_BUDGET_MIN || "120") * 60000
 const CONCURRENCY = 5
@@ -76,7 +76,7 @@ async function fetchPage(domain: string, path: string): Promise<{ title: string,
 
 async function candidates(domains: string[]): Promise<any[]> {
   const list = encodeURIComponent(domains.map(d => `"${d}"`).join(","))
-  const r = await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?select=domain,pages,language&domain=in.(${list})&subpages_crawled_at=is.null&owner_key=is.null&actions=neq.%5B%5D`, { headers: SUPABASE_HEADERS })
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?select=domain,pages,language&domain=in.(${list})&or=(subpages_crawled_at.is.null,subpages_crawled_at.lt.${encodeURIComponent(new Date(Date.now() - 90 * 86400000).toISOString())})&owner_key=is.null&actions=neq.%5B%5D`, { headers: SUPABASE_HEADERS })
   if (!r.ok) throw new Error(`Could not load sites: ${r.status} ${await r.text()}`)
   return r.json()
 }

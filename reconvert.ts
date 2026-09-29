@@ -24,8 +24,16 @@ if (!process.env.SUPABASE_SERVICE_KEY) { console.error("Missing SUPABASE_SERVICE
 type Row = { domain: string, conversion: string | null }
 const runStart = new Date().toISOString()
 
-async function backlog(size: number, withLlm: boolean): Promise<Row[]> {
+async function backlog(size: number, withLlm: boolean, foreign = false): Promise<Row[]> {
   const notYet = `updated_at=lt.${encodeURIComponent(runStart)}&status=is.null&owner_key=is.null`
+  // First with LLM quota: sites whose only description is "X is a Danish-language website at x.dk"
+  // (the rule-based converter can't write English about them): the LLM writes a real summary.
+  if (withLlm && foreign) {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?select=domain,conversion&${notYet}&conversion=eq.heuristic&pages->/->>content=like.*-language%20website%20at*&order=popularity_rank.asc.nullslast&limit=${size}`, { headers: SUPABASE_HEADERS })
+    if (r.ok) return (await r.json()).map((row: any) => ({ domain: row.domain, conversion: row.conversion ?? null }))
+    console.log(`Foreign-first query failed (${r.status}); skipping it`)
+    return []
+  }
   const url = withLlm
     ? `${SUPABASE_URL}/rest/v1/lawp_sites?select=domain,conversion&${notYet}&and=(or(actions.eq.%5B%5D,conversion.eq.heuristic),or(category.is.null,category.not.in.(adult,gambling)))&order=popularity_rank.asc.nullslast,updated_at.asc&limit=${size}`
     : `${SUPABASE_URL}/rest/v1/lawp_sites?select=domain,conversion&${notYet}&actions=eq.%5B%5D&order=updated_at.asc&limit=${size}`
@@ -68,9 +76,11 @@ async function main() {
     return run
   }
 
+  let foreignFirst = true
   while (processed < LIMIT && Date.now() - start < TIME_BUDGET_MS) {
     const withLlm = llmOn()
-    const rows = await backlog(Math.min(1000, LIMIT - processed), withLlm)
+    let rows = withLlm && foreignFirst ? await backlog(Math.min(500, LIMIT - processed), true, true) : []
+    if (!rows.length) { foreignFirst = false; rows = await backlog(Math.min(1000, LIMIT - processed), withLlm) }
     if (!rows.length) {
       if (withLlm) { llmMisses = LLM_GIVE_UP_AFTER; continue } // nothing left for the LLM: switch to minimal-only
       console.log("Backlog is empty"); break
