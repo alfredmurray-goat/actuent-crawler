@@ -106,6 +106,8 @@ export function placeFrom(el: any, city: string, country: string): Place | null 
   const tags: Record<string, string> = el.tags || {}
   const website = tags.website || tags["contact:website"] || tags.url
   if (!website || !tags.name) return null
+  // Closed places ("vacant", "disused:shop=…") aren't businesses any more.
+  if (tags.shop === "vacant" || tags.amenity === "vacant" || Object.keys(tags).some(k => /^(disused|abandoned|was|demolished|removed):/.test(k))) return null
   let url: URL
   try { url = new URL(/^https?:\/\//i.test(website) ? website : `https://${website}`) } catch { return null }
   const domain = url.hostname.toLowerCase().replace(/^www\./, "")
