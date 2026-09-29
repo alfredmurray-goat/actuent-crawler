@@ -14,6 +14,7 @@ async function get(path: string) {
   return { status: r.status, ms: Date.now() - t, body }
 }
 
+async function main() {
 for (const domain of domains) {
   console.log(`\n== ${domain}`)
   const site = await get(`lawp_sites?select=domain,name,status,native,category,language,popularity_rank,updated_at,owner_key&domain=eq.${encodeURIComponent(domain)}`)
@@ -30,3 +31,5 @@ for (const domain of domains) {
     console.log("same owner:", Array.isArray(same.body) ? same.body.map((s: any) => s.domain) : same)
   }
 }
+}
+main()
