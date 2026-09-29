@@ -30,7 +30,25 @@ function maxAgeDays(score: number): number | null {
   return score >= 30 ? 2 : score >= 10 ? 7 : score >= 3 ? 21 : null
 }
 
+// Monthly (TOP_REFRESH=1, the first nights of each month): the 5,000 best-known sites not checked
+// for 30 days, best-known first, so the sites people search for most keep accurate summaries.
+async function topQueue(): Promise<{ domain: string, score: number, overdue: number }[]> {
+  const cutoff = Date.now() - 30 * 86400000
+  const out: { domain: string, score: number, overdue: number }[] = []
+  for (let offset = 0; offset < 5000; offset += 1000) {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?select=domain,updated_at,refreshed_at,popularity_rank&status=is.null&owner_key=is.null&popularity_rank=lte.5000&order=popularity_rank.asc&limit=1000&offset=${offset}`, { headers: SUPABASE_HEADERS })
+    const rows: any[] = res.ok ? await res.json() : []
+    for (const r of rows) {
+      const last = Math.max(Date.parse(r.updated_at) || 0, Date.parse(r.refreshed_at) || 0)
+      if (last < cutoff) out.push({ domain: r.domain, score: 5001 - r.popularity_rank, overdue: (Date.now() - last) / (30 * 86400000) })
+    }
+    if (rows.length < 1000) break
+  }
+  return out
+}
+
 async function queue(): Promise<{ domain: string, score: number, overdue: number }[]> {
+  if (process.env.TOP_REFRESH === "1") return topQueue()
   const scores = await demand()
   const wanted = [...scores.entries()].filter(([, n]) => maxAgeDays(n) !== null)
   const out: { domain: string, score: number, overdue: number }[] = []
@@ -103,7 +121,7 @@ async function markChecked(domain: string, fp: Fingerprint | null, row: any) {
 async function main() {
   const start = Date.now()
   const todo = await queue()
-  console.log(`${todo.length} in-demand sites are due a refresh; doing up to ${MAX_SITES}`)
+  console.log(`${todo.length} ${process.env.TOP_REFRESH === "1" ? "of the 5,000 best-known sites are over a month old" : "in-demand sites are due a refresh"}; doing up to ${MAX_SITES}`)
   let done = 0
   for (const { domain, score } of todo.slice(0, MAX_SITES)) {
     if (Date.now() - start > TIME_BUDGET_MS) { console.log("Time budget used"); break }

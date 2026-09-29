@@ -1,0 +1,30 @@
+name: Refresh Top 5,000 Sites
+# The first seven nights of each month: the best-known sites not checked for 30 days get a fresh
+# look (unchanged ones cost nothing: a 304 or the same text skips the AI). Stops in busy hours.
+on:
+  schedule:
+    - cron: '30 22 1-7 * *'
+  workflow_dispatch:
+concurrency:
+  group: refresh-top
+  cancel-in-progress: false
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 200
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm install
+      - run: npx tsx recrawl_popular.ts
+        env:
+          TOP_REFRESH: '1'
+          RECRAWL_MAX: '900'
+          TIME_BUDGET_MIN: '180'
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
+          JINA_API_KEY: ${{ secrets.JINA_API_KEY }}
