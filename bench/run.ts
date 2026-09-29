@@ -68,7 +68,7 @@ async function main() {
   const summary = stats(counted)
   const original = stats(counted.filter(r => cases.findIndex(c => c.q === r.q) < 41))
   const p50 = summary.p50_ms, p95 = summary.p95_ms
-  const byKind = Object.fromEntries([...new Set(counted.map(r => r.kind))].sort().map(k => [k, stats(counted.filter(r => r.kind === k))]))
+  const byKind: Record<string, ReturnType<typeof stats>> = Object.fromEntries([...new Set(counted.map(r => r.kind))].sort().map(k => [k, stats(counted.filter(r => r.kind === k))]))
   console.log(JSON.stringify({ ...summary, original_41: original, network_errors: networkErrors.length }))
   for (const [k, v] of Object.entries(byKind)) console.log(`  ${k.padEnd(9)} ${String(v.queries).padStart(3)} searches · hit@1 ${v.hit_at_1}% · hit@5 ${v.hit_at_5}% · median ${v.p50_ms} ms`)
   if (networkErrors.length > rows.length * 0.1) { console.log(`✗ ${networkErrors.length} requests failed on the benchmark's side (no connection): this run isn't valid.`); process.exitCode = 1; return }
