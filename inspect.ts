@@ -15,6 +15,11 @@ async function get(path: string) {
 }
 
 async function main() {
+// Which of the newer tables exist (each list_*.sql adds some).
+for (const table of ["search_cache", "name_websites", "query_reformulations", "search_misses", "search_vocab", "crawl_queue"]) {
+  const t = await get(`${table}?select=*&limit=0`)
+  console.log(`table ${table}: ${t.status === 200 ? "exists" : `missing (${t.status})`}`)
+}
 for (const domain of domains) {
   console.log(`\n== ${domain}`)
   const site = await get(`lawp_sites?select=domain,name,status,native,category,language,popularity_rank,updated_at,owner_key&domain=eq.${encodeURIComponent(domain)}`)
