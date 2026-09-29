@@ -9,6 +9,9 @@ on:
         description: 'How many sites this run'
         default: '2000'
         required: false
+      domains:
+        description: 'Or just these domains (space separated)'
+        required: false
 jobs:
   recategorize:
     runs-on: ubuntu-latest
@@ -30,4 +33,5 @@ jobs:
           COHERE_API_KEY: ${{ secrets.COHERE_API_KEY }}
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
           RECATEGORIZE_LIMIT: ${{ inputs.limit || '2000' }}
+          DOMAINS: ${{ inputs.domains }}
           TIME_BUDGET_MIN: '80'

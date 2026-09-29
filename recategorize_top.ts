@@ -46,8 +46,23 @@ ${sites.map(s => `${s.domain} | ${s.name || ""} | ${summary(s)}`).join("\n")}`
   } catch { return {} }
 }
 
+// DOMAINS="a.com b.com": re-check just these (for sites outside the top 20,000).
+async function named(domains: string[]) {
+  const list = encodeURIComponent(domains.map(d => `"${d}"`).join(","))
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?select=domain,name,pages,category&domain=in.(${list})`, { headers: SUPABASE_HEADERS })
+  const sites: any[] = r.ok ? await r.json() : []
+  const picked = await classify(sites)
+  for (const s of sites) {
+    const c = picked[s.domain]
+    if (!c || c === s.category) { console.log(`  ${s.domain}: ${s.category || "(none)"} (kept)`); continue }
+    await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?domain=eq.${encodeURIComponent(s.domain)}`, { method: "PATCH", headers: { ...JSON_HEADERS, "Prefer": "return=minimal" }, body: JSON.stringify({ category: c }) }).catch(() => {})
+    console.log(`  ${s.domain}: ${s.category || "(none)"} → ${c}`)
+  }
+}
+
 async function main() {
   const start = Date.now()
+  if (process.env.DOMAINS) return named(process.env.DOMAINS.split(/[\s,]+/).filter(Boolean).slice(0, 25))
   let from = await state()
   if (from >= TOP) from = 0
   console.log(`Re-checking categories from popularity rank ${from + 1}`)
