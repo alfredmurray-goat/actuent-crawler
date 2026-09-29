@@ -74,7 +74,7 @@ function getTargets(): Promise<Target[]> {
       baseURL: "https://api.mistral.ai/v1", apiKey: process.env.MISTRAL_API_KEY
     })
     if (process.env.CLOUDFLARE_ACCOUNT_ID && process.env.CLOUDFLARE_AI_TOKEN) targets.push({
-      id: "cloudflare", provider: "openai-compatible", model: process.env.CLOUDFLARE_AI_MODEL || "@cf/meta/llama-3.1-8b-instruct",
+      id: "cloudflare", provider: "openai-compatible", model: process.env.CLOUDFLARE_AI_MODEL || "@cf/mistralai/mistral-small-3.1-24b-instruct",
       baseURL: `https://api.cloudflare.com/client/v4/accounts/${process.env.CLOUDFLARE_ACCOUNT_ID}/ai/v1`, apiKey: process.env.CLOUDFLARE_AI_TOKEN, jsonMode: false
     })
     if (process.env.COHERE_API_KEY) targets.push({

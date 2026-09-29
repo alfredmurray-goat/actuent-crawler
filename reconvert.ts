@@ -38,12 +38,18 @@ async function backlog(size: number, withLlm: boolean, foreign = false): Promise
     ? `${SUPABASE_URL}/rest/v1/lawp_sites?select=domain,conversion&${notYet}&and=(or(actions.eq.%5B%5D,conversion.eq.heuristic),or(category.is.null,category.not.in.(adult,gambling)))&order=popularity_rank.asc.nullslast,updated_at.asc&limit=${size}`
     : `${SUPABASE_URL}/rest/v1/lawp_sites?select=domain,conversion&${notYet}&actions=eq.%5B%5D&order=updated_at.asc&limit=${size}`
   let r = await fetch(url, { headers: SUPABASE_HEADERS })
-  // A busy database can time out on the "popular first" query: fall back to the simple one.
+  // A busy database can time out on the "popular first" query: fall back to the simple one, and
+  // when that times out too (another big job running), try smaller batches a little later.
   if (!r.ok && withLlm) {
     console.log(`Backlog query timed out (${r.status}); using the simple one`)
     r = await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?select=domain,conversion&${notYet}&actions=eq.%5B%5D&order=updated_at.asc&limit=${size}`, { headers: SUPABASE_HEADERS })
   }
-  if (!r.ok) throw new Error(`Could not load the backlog: ${r.status} ${await r.text()}`)
+  for (let attempt = 1; !r.ok && attempt <= 3; attempt++) {
+    console.log(`Backlog query failed (${r.status}); waiting a minute, then trying a smaller batch (${attempt}/3)`)
+    await new Promise(res => setTimeout(res, 60_000))
+    r = await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?select=domain,conversion&${notYet}&actions=eq.%5B%5D&limit=${Math.max(20, Math.floor(size / (2 ** attempt)))}`, { headers: SUPABASE_HEADERS })
+  }
+  if (!r.ok) { console.log(`The database is too busy to load the backlog (${r.status}); stopping here, the next run carries on.`); return [] }
   return (await r.json()).map((row: any) => ({ domain: row.domain, conversion: row.conversion ?? null }))
 }
 
