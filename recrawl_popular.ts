@@ -1,4 +1,5 @@
 import { SUPABASE_URL, SUPABASE_HEADERS, fetchNative, scrapeJina, toLAWP, saveSite, contentHash, robotsAllows } from "./shared"
+import { recordChange } from "./changes"
 import { searchNeedsTheDatabase } from "./quiet"
 import { fingerprint, Fingerprint } from "./freshness"
 
@@ -74,13 +75,16 @@ async function queue(): Promise<{ domain: string, score: number, overdue: number
 
 async function recrawlSite(domain: string): Promise<void> {
   const native = await fetchNative(domain)
-  if (native) { await saveSite(native); console.log(`native: ${domain}`); return }
+  if (native) {
+    const [before] = await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?select=name,pages,actions&domain=eq.${encodeURIComponent(domain)}`, { headers: SUPABASE_HEADERS }).then(r => r.ok ? r.json() : []).catch(() => [])
+    await saveSite(native); await recordChange(domain, before, native); console.log(`native: ${domain}`); return
+  }
 
   if (!await robotsAllows(domain, "/")) { console.log(`robots.txt disallows: ${domain}`); return }
 
-  let existing = await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?select=content_hash,owner_key,http_etag,http_last_modified,page_fingerprint&domain=eq.${encodeURIComponent(domain)}`, { headers: SUPABASE_HEADERS })
+  let existing = await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?select=name,pages,actions,content_hash,owner_key,http_etag,http_last_modified,page_fingerprint&domain=eq.${encodeURIComponent(domain)}`, { headers: SUPABASE_HEADERS })
   const freshnessColumns = existing.ok
-  if (!existing.ok) existing = await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?select=content_hash,owner_key&domain=eq.${encodeURIComponent(domain)}`, { headers: SUPABASE_HEADERS })
+  if (!existing.ok) existing = await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?select=name,pages,actions,content_hash,owner_key&domain=eq.${encodeURIComponent(domain)}`, { headers: SUPABASE_HEADERS })
   const row = existing.ok ? (await existing.json())?.[0] : null
   if (row?.owner_key) { console.log(`claimed by owner, not overwritten: ${domain}`); return }
 
@@ -104,7 +108,9 @@ async function recrawlSite(domain: string): Promise<void> {
   if (!Array.isArray(lawp.actions) || lawp.actions.length === 0) { console.log(`no usable LAWP, kept existing: ${domain}`); return }
   await saveSite(lawp, hash)
   if (freshnessColumns) await markChecked(domain, fp, row)
-  console.log(`recrawled: ${domain}`)
+  // For the change feeds (changes.ts): what visibly changed since the last crawl.
+  const changed = await recordChange(domain, row, lawp)
+  console.log(`recrawled${changed ? " (changed)" : ""}: ${domain}`)
 }
 
 // Records a check (and the homepage's fingerprint for next time) without touching updated_at.
