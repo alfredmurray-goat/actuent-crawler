@@ -3,6 +3,7 @@
 // knowing it; site pages show the result with a fix. Writes only lawp_sites.ai_access — never
 // updated_at. Rechecks every 30 days. Needs list_five.sql.
 import { fetchPublic } from "./safe-fetch"
+import { launchWeekPause } from "./quiet"
 
 const SUPABASE_URL = "https://bcmwypjrahtxogytsvuc.supabase.co"
 const KEY = process.env.SUPABASE_SERVICE_KEY!
@@ -74,6 +75,7 @@ async function check(domain: string): Promise<object> {
 }
 
 async function main() {
+  if (launchWeekPause()) return
   const start = Date.now()
   let done = 0, withBlocks = 0, lastDomain = ""
   const stale = new Date(Date.now() - 30 * 86400000).toISOString()

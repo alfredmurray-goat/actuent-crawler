@@ -3,6 +3,7 @@
 // deleted, and updated_at is never changed, so the reconvert job isn't disturbed.
 // Claimed and native sites are never flagged. Needs list_four.sql.
 import { isPublicHost } from "./safe-fetch"
+import { launchWeekPause } from "./quiet"
 
 const SUPABASE_URL = "https://bcmwypjrahtxogytsvuc.supabase.co"
 const KEY = process.env.SUPABASE_SERVICE_KEY!
@@ -63,6 +64,7 @@ async function slashDuplicates(): Promise<number> {
 }
 
 async function main() {
+  if (launchWeekPause()) return
   const start = Date.now()
   console.log(`${await slashDuplicates()} rows with a slash in the domain hidden as duplicates`)
   let checked = 0, parked = 0, duplicates = 0

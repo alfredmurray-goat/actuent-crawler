@@ -4,8 +4,12 @@ import { SUPABASE_URL, SUPABASE_HEADERS } from "./shared"
 // live search. They stop when searches need it:
 //   • during busy hours, 08:00–21:00 UTC (daytime in Europe, morning to afternoon in the US), and
 //   • when speed_alert.ts found searches slow in the last hour (crawler_state search_slow_until).
+//   • all day during launch week, 14–21 October 2026 (Copenhagen time), even for runs started by
+//     hand, unless IGNORE_PAUSE=1: the whole database goes to searches while launch traffic comes in.
 // Runs started by hand (workflow_dispatch) or with IGNORE_PEAK=1 aren't stopped for busy hours.
 const PEAK_START = 8, PEAK_END = 21
+// 14 Oct 00:00 to 22 Oct 00:00 in Copenhagen (CEST, UTC+2).
+const PAUSE_FROM = Date.parse("2026-10-13T22:00:00Z"), PAUSE_UNTIL = Date.parse("2026-10-21T22:00:00Z")
 let checked: { at: number, reason: string | null } | null = null
 
 export async function searchNeedsTheDatabase(): Promise<string | null> {
@@ -13,7 +17,8 @@ export async function searchNeedsTheDatabase(): Promise<string | null> {
   let reason: string | null = null
   const hour = new Date().getUTCHours()
   const manual = process.env.GITHUB_EVENT_NAME === "workflow_dispatch" || process.env.IGNORE_PEAK === "1"
-  if (!manual && hour >= PEAK_START && hour < PEAK_END) reason = `busy hours (${PEAK_START}:00–${PEAK_END}:00 UTC)`
+  if (Date.now() >= PAUSE_FROM && Date.now() < PAUSE_UNTIL && process.env.IGNORE_PAUSE !== "1") reason = "launch week (14–21 October): crawlers are paused"
+  if (!reason && !manual && hour >= PEAK_START && hour < PEAK_END) reason = `busy hours (${PEAK_START}:00–${PEAK_END}:00 UTC)`
   if (!reason) {
     const r = await fetch(`${SUPABASE_URL}/rest/v1/crawler_state?id=eq.search_slow_until&select=value`, { headers: SUPABASE_HEADERS }).catch(() => null)
     const rows = r?.ok ? await r.json() : []
@@ -30,4 +35,11 @@ export async function markSearchSlow(minutes: number): Promise<void> {
     method: "POST", headers: { ...SUPABASE_HEADERS, "Content-Type": "application/json", "Prefer": "resolution=merge-duplicates" },
     body: JSON.stringify({ id: "search_slow_until", value: Math.floor(Date.now() / 60_000) + minutes })
   }).catch(() => {})
+}
+
+// For jobs that aren't in a hurry (cleanups, checks): skip the whole run during launch week.
+export function launchWeekPause(): boolean {
+  const paused = Date.now() >= PAUSE_FROM && Date.now() < PAUSE_UNTIL && process.env.IGNORE_PAUSE !== "1"
+  if (paused) console.log("Launch week (14–21 October): this job is paused so searches get the whole database. Set IGNORE_PAUSE=1 to run it anyway.")
+  return paused
 }

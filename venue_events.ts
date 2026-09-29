@@ -1,3 +1,4 @@
+import { launchWeekPause } from "./quiet"
 
 // Weekly: re-reads the events pages of every venue in the index (theatres, cinemas, music venues,
 // arts centres, clubs, museums…), so actuent_events and "what's on" pages stay current. Venues are
@@ -10,6 +11,7 @@ const TYPES = ["theatre", "cinema", "arts centre", "music venue", "nightclub", "
 if (!process.env.SUPABASE_SERVICE_KEY) { console.error("Missing SUPABASE_SERVICE_KEY"); process.exit(1) }
 
 async function main() {
+  if (launchWeekPause()) return
   // Imported here so osm_businesses.ts doesn't start its own run.
   process.env.OSM_NO_MAIN = "1"
   const { venueEvents } = await import("./osm_businesses")
