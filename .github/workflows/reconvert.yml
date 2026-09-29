@@ -1,7 +1,7 @@
 name: Reconvert Minimal Sites
 on:
   schedule:
-    - cron: '15 */3 * * *'
+    - cron: '15 21,0,3,6 * * *'
   workflow_dispatch:
     inputs:
       limit:

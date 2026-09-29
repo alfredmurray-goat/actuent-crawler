@@ -1,4 +1,5 @@
 import { SUPABASE_URL, SUPABASE_SERVICE_KEY, fetchNative, fetchSite, minimal, saveSite, saveEvents, contentHash, robotsAllows } from "./shared"
+import { searchNeedsTheDatabase } from "./quiet"
 import { INFRASTRUCTURE } from "./heuristic"
 import { extractEvents } from "./business"
 import { fetchLlmsTxt } from "./llmstxt"
@@ -205,7 +206,7 @@ async function main() {
   const totals: Record<Outcome, number> = { full: 0, minimal: 0, skipped: 0, error: 0 }
 
   // Keep going until CRAWL_LIMIT sites are saved with real content (or time runs out).
-  while (pos < all.length && totals.full < CRAWL_LIMIT && Date.now() - start < TIME_BUDGET_MS) {
+  while (pos < all.length && totals.full < CRAWL_LIMIT && Date.now() - start < TIME_BUDGET_MS && !await searchNeedsTheDatabase()) {
     const chunk = all.slice(pos, pos + CHUNK_SIZE)
     const todo = await filterUncrawled(chunk)
     alreadyIndexed += chunk.length - todo.length

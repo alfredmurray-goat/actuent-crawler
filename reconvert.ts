@@ -1,4 +1,5 @@
 import { SUPABASE_URL, SUPABASE_HEADERS, fetchNative, fetchSite, saveSite, saveEvents, contentHash, robotsAllows } from "./shared"
+import { searchNeedsTheDatabase } from "./quiet"
 import { INFRASTRUCTURE } from "./heuristic"
 import { extractEvents } from "./business"
 import { fetchLlmsTxt } from "./llmstxt"
@@ -83,7 +84,7 @@ async function main() {
   }
 
   let foreignFirst = true
-  while (processed < LIMIT && Date.now() - start < TIME_BUDGET_MS) {
+  while (processed < LIMIT && Date.now() - start < TIME_BUDGET_MS && !await searchNeedsTheDatabase()) {
     const withLlm = llmOn()
     let rows = withLlm && foreignFirst ? await backlog(Math.min(500, LIMIT - processed), true, true) : []
     if (!rows.length) { foreignFirst = false; rows = await backlog(Math.min(1000, LIMIT - processed), withLlm) }

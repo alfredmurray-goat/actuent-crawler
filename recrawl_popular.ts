@@ -1,4 +1,5 @@
 import { SUPABASE_URL, SUPABASE_HEADERS, fetchNative, scrapeJina, toLAWP, saveSite, contentHash, robotsAllows } from "./shared"
+import { searchNeedsTheDatabase } from "./quiet"
 import { fingerprint, Fingerprint } from "./freshness"
 
 
@@ -106,6 +107,7 @@ async function main() {
   let done = 0
   for (const { domain, score } of todo.slice(0, MAX_SITES)) {
     if (Date.now() - start > TIME_BUDGET_MS) { console.log("Time budget used"); break }
+    if (await searchNeedsTheDatabase()) break
     try { await recrawlSite(domain); done++ } catch (e) { console.log(`error: ${domain}: ${e}`) }
     if (done % 50 === 0 && done) console.log(`${done} refreshed (last demand score ${score})`)
   }

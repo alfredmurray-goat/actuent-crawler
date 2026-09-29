@@ -1,23 +1,18 @@
-name: Search Benchmark
+name: Queue Missing Sites
 on:
   schedule:
-    - cron: '30 6 * * 1'
+    - cron: '0 22 * * 1'
   workflow_dispatch:
 jobs:
-  bench:
+  queue:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
       - run: npm install
-      - run: npx tsx bench/run.ts
-        env:
-          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
-      # Expected sites the index doesn't have are queued for crawling (queue_seeds.ts).
       - run: npx tsx queue_seeds.ts
-        if: always()
         env:
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}

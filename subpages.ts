@@ -1,6 +1,7 @@
 import fs from "fs"
 import readline from "readline"
 import { SUPABASE_URL, SUPABASE_HEADERS, robotsAllows, saveEvents } from "./shared"
+import { searchNeedsTheDatabase } from "./quiet"
 import { extractEvents } from "./business"
 import { USER_AGENT } from "./robots"
 import { sitemapPaths } from "./sitemap"
@@ -119,7 +120,7 @@ async function main() {
   const domains = await topDomains("./tranco_PY69J.csv")
   console.log(`Checking subpages for the top ${domains.length} sites`)
   let sites = 0, pagesFound = 0
-  for (let i = 0; i < domains.length && Date.now() - start < TIME_BUDGET_MS; i += CHUNK) {
+  for (let i = 0; i < domains.length && Date.now() - start < TIME_BUDGET_MS && !await searchNeedsTheDatabase(); i += CHUNK) {
     const todo = await candidates(domains.slice(i, i + CHUNK))
     let index = 0
     await Promise.all(Array.from({ length: CONCURRENCY }, async () => {

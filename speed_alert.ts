@@ -1,4 +1,5 @@
 import { SUPABASE_URL, SUPABASE_HEADERS } from "./shared"
+import { markSearchSlow } from "./quiet"
 
 // Hourly: how fast searches were in the last hour. When the slowest 5% took over 3 seconds (with
 // at least 20 searches), this job fails — and GitHub emails the repository owner about it.
@@ -15,6 +16,8 @@ async function main() {
   console.log(`Last hour: ${times.length} searches, median ${p50} ms, slowest 5% ${p95} ms`)
   if (p95 > LIMIT_MS) {
     console.log(`::error::Search is slow: the slowest 5% took ${p95} ms in the last hour (limit ${LIMIT_MS} ms). Check the ops page and Supabase.`)
+    // Heavy jobs (quiet.ts) stop for the next 45 minutes so search gets the database back.
+    await markSearchSlow(45)
     process.exitCode = 1
   }
 }

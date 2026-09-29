@@ -20,6 +20,17 @@ function right(c: Case, r: any): boolean {
   return false
 }
 
+// The kind of search, so a change that helps one kind and hurts another shows up.
+const SHOPPING = /\b(shoes?|sneakers?|headphones|desk|furniture|monitor|laptop|bike|jacket|kaufen|buy|zapatos|sko|löbesko|løbesko|laufschuhe)\b/i
+function kind(c: Case): string {
+  if (/^\S+\.[a-z]{2,}(\/\S*)?$/i.test(c.q)) return "domain"
+  if (c.tld || c.category) return "local"
+  if (c.language || /[^\x00-\x7f]/.test(c.q)) return "foreign"
+  if (SHOPPING.test(c.q)) return "shopping"
+  if ((c.domains?.length || 0) <= 2 && c.q.split(/\s+/).length <= 3) return "name"
+  return "topic"
+}
+
 async function main() {
   const rows: any[] = []
   for (const c of cases) {
@@ -32,7 +43,7 @@ async function main() {
     } catch (e: any) { error = String(e?.message || e) }
     const ms = Date.now() - started
     const rank = results.slice(0, 10).findIndex(r => right(c, r)) + 1
-    rows.push({ q: c.q, rank: rank || null, ms, top: results.slice(0, 3).map(r => r.domain), ...(error ? { error } : {}) })
+    rows.push({ q: c.q, kind: kind(c), rank: rank || null, ms, top: results.slice(0, 3).map(r => r.domain), ...(error ? { error } : {}) })
     console.log(`${rank === 1 ? "✓ " : rank ? `${rank} ` : "✗ "} ${String(ms).padStart(6)}ms  ${c.q}  →  ${results.slice(0, 3).map(r => r.domain).join(", ") || error || "(nothing)"}`)
     await new Promise(r => setTimeout(r, 3500)) // stay under the free rate limit
   }
@@ -53,15 +64,17 @@ async function main() {
   const summary = stats(counted)
   const original = stats(counted.filter(r => cases.findIndex(c => c.q === r.q) < 41))
   const p50 = summary.p50_ms, p95 = summary.p95_ms
+  const byKind = Object.fromEntries([...new Set(counted.map(r => r.kind))].sort().map(k => [k, stats(counted.filter(r => r.kind === k))]))
   console.log(JSON.stringify({ ...summary, original_41: original, network_errors: networkErrors.length }))
+  for (const [k, v] of Object.entries(byKind)) console.log(`  ${k.padEnd(9)} ${String(v.queries).padStart(3)} searches · hit@1 ${v.hit_at_1}% · hit@5 ${v.hit_at_5}% · median ${v.p50_ms} ms`)
   if (networkErrors.length > rows.length * 0.1) { console.log(`✗ ${networkErrors.length} requests failed on the benchmark's side (no connection): this run isn't valid.`); process.exitCode = 1; return }
   if (process.env.GITHUB_STEP_SUMMARY) {
-    fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `## Search benchmark\n\n| hit@1 | hit@5 | MRR | p50 | p95 |\n|---|---|---|---|---|\n| ${summary.hit_at_1}% | ${summary.hit_at_5}% | ${summary.mrr} | ${p50} ms | ${p95} ms |\n\nOriginal 41 queries: hit@1 ${original.hit_at_1}%, hit@5 ${original.hit_at_5}%, MRR ${original.mrr}\n\n| Query | Rank | Time | Top 3 |\n|---|---|---|---|\n${rows.map(r => `| ${r.q} | ${r.rank ?? "✗"} | ${r.ms} ms | ${r.top.join(", ")} |`).join("\n")}\n`)
+    fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `## Search benchmark\n\n| hit@1 | hit@5 | MRR | p50 | p95 |\n|---|---|---|---|---|\n| ${summary.hit_at_1}% | ${summary.hit_at_5}% | ${summary.mrr} | ${p50} ms | ${p95} ms |\n\nOriginal 41 queries: hit@1 ${original.hit_at_1}%, hit@5 ${original.hit_at_5}%, MRR ${original.mrr}\n\n| Kind | Searches | hit@1 | hit@5 | median |\n|---|---|---|---|---|\n${Object.entries(byKind).map(([k, v]) => `| ${k} | ${v.queries} | ${v.hit_at_1}% | ${v.hit_at_5}% | ${v.p50_ms} ms |`).join("\n")}\n\n| Query | Rank | Time | Top 3 |\n|---|---|---|---|\n${rows.map(r => `| ${r.q} | ${r.rank ?? "✗"} | ${r.ms} ms | ${r.top.join(", ")} |`).join("\n")}\n`)
   }
   if (KEY) {
     const r = await fetch(`${SUPABASE_URL}/rest/v1/search_benchmarks`, {
       method: "POST", headers: { "apikey": KEY, "Authorization": `Bearer ${KEY}`, "Content-Type": "application/json", "Prefer": "return=minimal" },
-      body: JSON.stringify({ ...summary, details: { original_41: original, rows } })
+      body: JSON.stringify({ ...summary, details: { original_41: original, by_kind: byKind, rows } })
     })
     console.log(r.ok ? "Saved to search_benchmarks" : `Not saved: ${r.status} ${await r.text()}`)
   }

@@ -1,4 +1,5 @@
 import { categorize } from "./category"
+import { searchNeedsTheDatabase } from "./quiet"
 
 // Sets lawp_sites.category for sites without one (rule-based, no LLM). Only the category column is
 // written — never updated_at — so it doesn't disturb the reconvert job's order. Sites that can't be
@@ -18,7 +19,7 @@ const tally: Record<string, number> = {}
 
 async function pass(recheck: boolean): Promise<number> {
   let done = 0, lastDomain = ""
-  while (done < LIMIT && Date.now() - start < TIME_BUDGET_MS) {
+  while (done < LIMIT && Date.now() - start < TIME_BUDGET_MS && !await searchNeedsTheDatabase()) {
     // Keyset pagination by domain; uncategorised rows, or "" rows when rechecking.
     const filter = recheck ? "category=eq." : "category=is.null"
     const r = await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?select=domain,name,pages,actions,business&${filter}&domain=gt.${encodeURIComponent(lastDomain)}&order=domain.asc&limit=500`, { headers: HEADERS })

@@ -1,6 +1,7 @@
 import fs from "fs"
 import readline from "readline"
 import { SUPABASE_URL, SUPABASE_HEADERS, robotsAllows } from "./shared"
+import { searchNeedsTheDatabase } from "./quiet"
 import { fetchProducts, saveProducts } from "./shop"
 import { checkWatches } from "./watches"
 
@@ -56,8 +57,24 @@ async function main() {
   }
   if (watched.length) console.log(`${alerts} alerts sent`)
 
+  // Country shop lists (seeds/shops.json) first: local shopping searches need their products.
+  try {
+    const seeds = Object.entries(JSON.parse(fs.readFileSync("./seeds/shops.json", "utf8"))).filter(([k]) => !k.startsWith("_")).flatMap(([, v]) => v as string[])
+    const todo = await due(seeds)
+    console.log(`Checking ${todo.length} country shops for products`)
+    for (const domain of todo) {
+      if (Date.now() - start > TIME_BUDGET_MS || await searchNeedsTheDatabase()) break
+      try {
+        const found = await robotsAllows(domain, "/products.json") ? await fetchProducts(domain) : []
+        await saveProducts(domain, found)
+        checked++
+        if (found.length) { shops++; items += found.length; console.log(`+${found.length} products ${domain} (country shop)`) }
+      } catch (e) { console.log(`error ${domain}: ${e}`) }
+    }
+  } catch (e) { console.log(`country shops: ${e}`) }
+
   console.log(`Checking the top ${domains.length} sites for shops`)
-  for (let i = 0; i < domains.length && Date.now() - start < TIME_BUDGET_MS; i += CHUNK) {
+  for (let i = 0; i < domains.length && Date.now() - start < TIME_BUDGET_MS && !await searchNeedsTheDatabase(); i += CHUNK) {
     const todo = await due(domains.slice(i, i + CHUNK))
     let index = 0
     await Promise.all(Array.from({ length: CONCURRENCY }, async () => {
@@ -86,7 +103,7 @@ async function main() {
   }
   const tried = new Set<string>()
   for (const filter of ["category=like.shop*", "category=in.(bakery,cafe,pets,food_delivery,hair_beauty,spa_wellness,fitness,events,museum_culture)", "or=(category.is.null,category.not.in.(adult,gambling))"]) {
-    while (Date.now() - start < TIME_BUDGET_MS) {
+    while (Date.now() - start < TIME_BUDGET_MS && !await searchNeedsTheDatabase()) {
       const r = await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?select=domain&products_crawled_at=is.null&status=is.null&owner_key=is.null&${filter}&order=updated_at.desc&limit=${CHUNK * 5}`, { headers: SUPABASE_HEADERS })
       if (!r.ok) { console.log(`long tail: ${r.status} ${await r.text()}`); break }
       // A site whose timestamp didn't save would come back every time; each is tried once per run.

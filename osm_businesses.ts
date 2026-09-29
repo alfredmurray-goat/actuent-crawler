@@ -1,4 +1,5 @@
 import { SUPABASE_URL, SUPABASE_HEADERS, fetchSite, saveSite, saveEvents, robotsAllows } from "./shared"
+import { searchNeedsTheDatabase } from "./quiet"
 import { heuristicLAWP, withBookingLinks } from "./heuristic"
 import { extractBusiness, extractEvents, Business, OpeningHours } from "./business"
 import { rescue } from "./rescue"
@@ -273,7 +274,7 @@ async function city([name, lat, lon, country]: typeof CITIES[number]): Promise<b
   // New websites first; a big city takes a few runs (the city only advances once it's done).
   const queue = [...list.filter(p => !index.has(p.domain)), ...list.filter(p => index.has(p.domain))]
   async function worker() {
-    while (queue.length && Date.now() - started < TIME_BUDGET_MS) {
+    while (queue.length && Date.now() - started < TIME_BUDGET_MS && !await searchNeedsTheDatabase()) {
       const p = queue.shift()!
       try {
         const k = index.get(p.domain)
@@ -293,7 +294,7 @@ async function city([name, lat, lon, country]: typeof CITIES[number]): Promise<b
 async function main() {
   if (!process.env.SUPABASE_SERVICE_KEY) { console.error("Missing SUPABASE_SERVICE_KEY"); process.exit(1) }
   let at = await state("osm_city")
-  for (let n = 0; n < CITIES_PER_RUN && Date.now() - started < TIME_BUDGET_MS; n++) {
+  for (let n = 0; n < CITIES_PER_RUN && Date.now() - started < TIME_BUDGET_MS && !await searchNeedsTheDatabase(); n++) {
     const c = CITIES[at % CITIES.length]
     const finished = await city(c)
     if (finished === "empty") {

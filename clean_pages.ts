@@ -1,4 +1,5 @@
 import { cleanPageText, cleanPages, changedText } from "./boilerplate"
+import { searchNeedsTheDatabase } from "./quiet"
 
 // Weekly: strips cookie banners, menus and copyright lines from page text already in the index
 // (crawled before the crawlers cleaned it themselves). Only non-native, unclaimed sites — a site's
@@ -28,7 +29,7 @@ async function patch(url: string, body: any): Promise<boolean> {
 
 async function sites(): Promise<number> {
   let last = "", changed = 0, seen = 0
-  while (Date.now() - started < TIME_BUDGET_MS / 2) {
+  while (Date.now() - started < TIME_BUDGET_MS / 2 && !await searchNeedsTheDatabase()) {
     const r = await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?select=domain,pages,updated_at&native=is.false&owner_key=is.null&domain=gt.${encodeURIComponent(last)}&order=domain.asc&limit=1000`, { headers: HEADERS })
     if (!r.ok) throw new Error(`${r.status} ${await r.text()}`)
     const rows: any[] = await r.json()
@@ -50,7 +51,7 @@ async function sites(): Promise<number> {
 
 async function subpages(): Promise<number> {
   let last = "", changed = 0, seen = 0
-  while (Date.now() - started < TIME_BUDGET_MS) {
+  while (Date.now() - started < TIME_BUDGET_MS && !await searchNeedsTheDatabase()) {
     const r = await fetch(`${SUPABASE_URL}/rest/v1/lawp_pages?select=full_url,content,updated_at&full_url=gt.${encodeURIComponent(last)}&order=full_url.asc&limit=1000`, { headers: HEADERS })
     if (!r.ok) throw new Error(`${r.status} ${await r.text()}`)
     const rows: any[] = await r.json()
