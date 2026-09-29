@@ -1,0 +1,21 @@
+name: Inspect Domains
+on:
+  workflow_dispatch:
+    inputs:
+      domains:
+        description: 'Domains, separated by spaces'
+        required: true
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm install
+      - run: npx tsx inspect.ts
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          DOMAINS: ${{ inputs.domains }}
