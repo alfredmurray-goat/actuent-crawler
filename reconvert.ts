@@ -16,6 +16,7 @@ import { convertSite, domainGone, isParkedOrError, notASite } from "./convert"
 
 const LIMIT = parseInt(process.env.RECONVERT_LIMIT || "3000")
 const CONCURRENCY = parseInt(process.env.RECONVERT_CONCURRENCY || "6")
+const FOREIGN_ONLY = process.env.FOREIGN_ONLY === "1"
 const TIME_BUDGET_MS = parseInt(process.env.TIME_BUDGET_MIN || "150") * 60000
 // After this many LLM misses in a row, stop asking the LLM for the rest of the run.
 const LLM_GIVE_UP_AFTER = 6
@@ -87,6 +88,9 @@ async function main() {
   while (processed < LIMIT && Date.now() - start < TIME_BUDGET_MS && !await searchNeedsTheDatabase()) {
     const withLlm = llmOn()
     let rows = withLlm && foreignFirst ? await backlog(Math.min(500, LIMIT - processed), true, true) : []
+    // FOREIGN_ONLY=1 (the nightly English-summaries run): only sites that still just say "a
+    // Danish-language website at …"; stop when they're done or the AI quota runs out.
+    if (FOREIGN_ONLY && (!rows.length || !withLlm)) { console.log(withLlm ? "No foreign-language sites left without an English summary" : "AI quota used up for now"); break }
     if (!rows.length) { foreignFirst = false; rows = await backlog(Math.min(1000, LIMIT - processed), withLlm) }
     if (!rows.length) {
       if (withLlm) { llmMisses = LLM_GIVE_UP_AFTER; continue } // nothing left for the LLM: switch to minimal-only

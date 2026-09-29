@@ -59,7 +59,21 @@ const CITIES: [string, number, number, string][] = [
   ["Dresden", 51.0504, 13.7373, "de"], ["Salzburg", 47.8095, 13.055, "at"], ["Basel", 47.5596, 7.5886, "ch"], ["Ghent", 51.0543, 3.7174, "be"],
   ["The Hague", 52.0705, 4.3007, "nl"], ["Eindhoven", 51.4416, 5.4697, "nl"], ["Cork", 51.8985, -8.4756, "ie"], ["Cardiff", 51.4816, -3.1791, "gb"],
   ["Belfast", 54.5973, -5.9301, "gb"], ["Brighton", 50.8225, -0.1372, "gb"], ["Philadelphia", 39.9526, -75.1652, "us"], ["San Diego", 32.7157, -117.1611, "us"],
-  ["Nashville", 36.1627, -86.7816, "us"], ["Atlanta", 33.749, -84.388, "us"], ["Minneapolis", 44.9778, -93.265, "us"], ["Ottawa", 45.4215, -75.6972, "ca"]
+  ["Nashville", 36.1627, -86.7816, "us"], ["Atlanta", 33.749, -84.388, "us"], ["Minneapolis", 44.9778, -93.265, "us"], ["Ottawa", 45.4215, -75.6972, "ca"],
+  // More of the US, Australia, Asia, Latin America, Africa and the Middle East (2026-09-29).
+  ["Houston", 29.7604, -95.3698, "us"], ["Dallas", 32.7767, -96.797, "us"], ["Phoenix", 33.4484, -112.074, "us"], ["Las Vegas", 36.1699, -115.1398, "us"],
+  ["New Orleans", 29.9511, -90.0715, "us"], ["Salt Lake City", 40.7608, -111.891, "us"], ["Pittsburgh", 40.4406, -79.9959, "us"], ["Detroit", 42.3314, -83.0458, "us"],
+  ["Honolulu", 21.3069, -157.8583, "us"], ["Calgary", 51.0447, -114.0719, "ca"], ["Perth", -31.9523, 115.8613, "au"], ["Adelaide", -34.9285, 138.6007, "au"],
+  ["Gold Coast", -28.0167, 153.4, "au"], ["Christchurch", -43.5321, 172.6362, "nz"], ["Tokyo", 35.6762, 139.6503, "jp"], ["Osaka", 34.6937, 135.5023, "jp"],
+  ["Kyoto", 35.0116, 135.7681, "jp"], ["Seoul", 37.5665, 126.978, "kr"], ["Singapore", 1.3521, 103.8198, "sg"], ["Hong Kong", 22.3193, 114.1694, "hk"],
+  ["Taipei", 25.033, 121.5654, "tw"], ["Bangkok", 13.7563, 100.5018, "th"], ["Kuala Lumpur", 3.139, 101.6869, "my"], ["Manila", 14.5995, 120.9842, "ph"],
+  ["Jakarta", -6.2088, 106.8456, "id"], ["Bali", -8.6705, 115.2126, "id"], ["Ho Chi Minh City", 10.8231, 106.6297, "vn"], ["Mumbai", 19.076, 72.8777, "in"],
+  ["Bangalore", 12.9716, 77.5946, "in"], ["Delhi", 28.7041, 77.1025, "in"], ["Dubai", 25.2048, 55.2708, "ae"], ["Abu Dhabi", 24.4539, 54.3773, "ae"],
+  ["Tel Aviv", 32.0853, 34.7818, "il"], ["Istanbul", 41.0082, 28.9784, "tr"], ["Cape Town", -33.9249, 18.4241, "za"], ["Johannesburg", -26.2041, 28.0473, "za"],
+  ["Nairobi", -1.2921, 36.8219, "ke"], ["Lagos", 6.5244, 3.3792, "ng"], ["Marrakech", 31.6295, -7.9811, "ma"], ["Cairo", 30.0444, 31.2357, "eg"],
+  ["Mexico City", 19.4326, -99.1332, "mx"], ["Buenos Aires", -34.6037, -58.3816, "ar"], ["Sao Paulo", -23.5505, -46.6333, "br"], ["Rio de Janeiro", -22.9068, -43.1729, "br"],
+  ["Santiago", -33.4489, -70.6693, "cl"], ["Bogota", 4.711, -74.0721, "co"], ["Lima", -12.0464, -77.0428, "pe"], ["Medellin", 6.2442, -75.5812, "co"],
+  ["Doha", 25.2854, 51.531, "qa"], ["Riyadh", 24.7136, 46.6753, "sa"]
 ]
 
 // Hosts that aren't the business's own website.
