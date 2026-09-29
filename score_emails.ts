@@ -1,7 +1,7 @@
 import crypto from "crypto"
 import { SUPABASE_URL, SUPABASE_HEADERS, SUPABASE_SERVICE_KEY } from "./shared"
 import { readiness } from "./score"
-import { sendEmail, esc, emailEnabled } from "./email"
+import { sendEmail, esc, emailEnabled, lawpyImg } from "./email"
 import { compare } from "./competitors"
 import { CATEGORIES } from "./category"
 
@@ -51,7 +51,7 @@ async function main() {
       const vs = await compare(site, get).catch(() => null)
       const page = `https://api.actuent.ai/site/${site.domain}`
       const unsubscribe = `https://api.actuent.ai/api/unsubscribe?domain=${encodeURIComponent(site.domain)}&token=${unsubscribeToken(site.domain)}`
-      const html = `<p>Hi,</p>
+      const html = `${lawpyImg(score >= 90 ? "dance" : score >= 50 ? "wave" : "think")}<p>Hi,</p>
 <p><strong>${esc(site.name || site.domain)}</strong> is <strong>${score}/100</strong> agent-ready this week${esc(change)}: ${esc(label.toLowerCase())}.</p>
 ${bots ? `<p>AI bots visited ${bots.total} times in the last 7 days (${bots.top.map(([b, n]) => `${esc(b)} ${n}`).join(", ")}).</p>` : ""}
 ${vs ? `<p>Among ${vs.total} similar sites (${esc(CATEGORIES[vs.category] || vs.category)}${vs.city ? ` in ${esc(vs.city)}` : ""}) you're <strong>#${vs.rank}</strong>.${vs.they_have[0] ? ` ${vs.they_have[0].count} of them have something you don't: ${esc(vs.they_have[0].label.toLowerCase())}.` : ""}</p>` : ""}

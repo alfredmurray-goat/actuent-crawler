@@ -1,7 +1,7 @@
 import crypto from "crypto"
 import { SUPABASE_URL, SUPABASE_HEADERS, SUPABASE_SERVICE_KEY } from "./shared"
 import { readiness } from "./score"
-import { sendEmail, esc, emailEnabled } from "./email"
+import { sendEmail, esc, emailEnabled, lawpyImg } from "./email"
 
 // Monthly (the 1st): an AI-visibility report for the owner of every claimed site, over the last
 // 30 days: how often AI agents got the site in search results and for which searches, visits
@@ -59,7 +59,7 @@ async function main() {
       const missing = checks.filter(c => !c.ok).sort((a, b) => b.points - a.points).slice(0, 3)
       const page = `https://api.actuent.ai/site/${site.domain}`
       const unsubscribe = `https://api.actuent.ai/api/unsubscribe?domain=${encodeURIComponent(site.domain)}&token=${unsubscribeToken(site.domain)}`
-      const html = `<p>Hi,</p>
+      const html = `${lawpyImg("talk")}<p>Hi,</p>
 <p>Here's how AI agents saw <strong>${esc(site.name || site.domain)}</strong> on Actuent over the last 30 days.</p>
 <table cellpadding="6" style="border-collapse:collapse;font-size:15px">
 <tr><td>In AI agents' search results</td><td><strong>${r.appearances.toLocaleString("en")}</strong> times</td></tr>

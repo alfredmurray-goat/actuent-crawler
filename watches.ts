@@ -1,6 +1,6 @@
 import { fetchPublic } from "./safe-fetch"
 import { SUPABASE_URL, SUPABASE_HEADERS } from "./shared"
-import { sendEmail, esc } from "./email"
+import { sendEmail, esc, lawpyImg } from "./email"
 
 // Price-drop and back-in-stock alerts (Pro): after a shop's products are saved, anyone watching one
 // of them gets an email and/or a webhook when its price drops (to their target, if set) or when a
@@ -16,7 +16,7 @@ async function notify(w: Watch, domain: string, payload: object, subject: string
     await fetchPublic(w.webhook_url, { method: "POST", headers: { "Content-Type": "application/json", "User-Agent": "Actuent/1.0 (+https://actuent.ai)" }, body: JSON.stringify(payload), signal: AbortSignal.timeout(8000) }, 0).catch(() => {})
   }
   const email = await accountEmail(w.api_key)
-  if (email) await sendEmail(email, subject, html + `<p style="color:#666;font-size:13px">You're getting this because you asked your AI assistant to watch this product with Actuent. Ask it to stop watching to turn this off.</p>`)
+  if (email) await sendEmail(email, subject, lawpyImg("dance") + html + `<p style="color:#666;font-size:13px">You're getting this because you asked your AI assistant to watch this product with Actuent. Ask it to stop watching to turn this off.</p>`)
 }
 
 async function accountEmail(keyHash: string): Promise<string | null> {

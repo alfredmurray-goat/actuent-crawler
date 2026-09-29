@@ -2,7 +2,7 @@ import crypto from "crypto"
 import { SUPABASE_URL, SUPABASE_HEADERS, SUPABASE_SERVICE_KEY, fetchSite } from "./shared"
 import { fetchPublic } from "./safe-fetch"
 import { extractBusiness } from "./business"
-import { sendEmail, esc, emailEnabled } from "./email"
+import { sendEmail, esc, emailEnabled, lawpyImg } from "./email"
 import { USER_AGENT } from "./robots"
 import { launchWeekPause } from "./quiet"
 
@@ -77,7 +77,7 @@ async function notify(site: any, changes: string[]) {
   const [account] = await get(`api_keys?select=email&key_hash=eq.${site.owner_key}`)
   if (!account?.email) return
   const unsubscribe = `https://api.actuent.ai/api/unsubscribe?domain=${encodeURIComponent(site.domain)}&token=${unsubscribeToken(site.domain)}`
-  const html = `<p>Hi,</p><p>Actuent noticed ${changes.length === 1 ? "a change" : "some changes"} on <strong>${esc(site.domain)}</strong> since yesterday:</p>
+  const html = `${lawpyImg("think")}<p>Hi,</p><p>Actuent noticed ${changes.length === 1 ? "a change" : "some changes"} on <strong>${esc(site.domain)}</strong> since yesterday:</p>
 <ul>${changes.map(c => `<li>${esc(c)}</li>`).join("")}</ul>
 <p>If that's intended, there's nothing to do. If not, it's worth fixing before customers (and their AI assistants) run into it.</p>
 <p><a href="https://analytics.actuent.ai/?edit=${encodeURIComponent(site.domain)}">Edit what agents see →</a></p>

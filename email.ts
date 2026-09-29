@@ -22,3 +22,9 @@ export async function sendEmail(to: string, subject: string, html: string, heade
     return r.ok
   } catch (e) { console.log(`email failed: ${e}`); return false }
 }
+
+// Lawpy, Actuent's mascot, at the top of an email: a small animated GIF (email apps don't show SVG;
+// ones that block images show the alt text). States: idle, wave, talk, think, dance.
+export function lawpyImg(state: "idle" | "wave" | "talk" | "think" | "dance"): string {
+  return `<img src="https://api.actuent.ai/assets/lawpy/lawpy-${state}.gif" width="108" height="72" alt="Lawpy, the Actuent mascot" style="display:block;margin:0 0 6px;border:0">`
+}
