@@ -1,5 +1,6 @@
 import { SUPABASE_URL, SUPABASE_HEADERS } from "./shared"
 import { sendEmail, esc, emailEnabled, lawpyImg } from "./email"
+import { readiness } from "./score"
 
 // Weekly "State of the AI web" post, every Monday: how much of the web AI agents can read and act
 // on, what changed since last week, what agents searched for. Numbers from the index; the text is
@@ -118,6 +119,37 @@ async function main() {
   if (!r.ok) throw new Error(`Could not save the report: ${r.status} ${await r.text()}`)
   console.log(`${title}\n\n${summary}`)
   await sendNewsletter(week, title, summary)
+  await recordScores(week)
+}
+
+// Top movers: this week's agent-readiness score of the 20,000 best-known sites (site_scores,
+// list_twentyfour.sql), compared with last week's. The biggest risers go into the report's data,
+// where the trends page (api.actuent.ai/trends) shows them.
+async function recordScores(week: string) {
+  const JSON_HEADERS = { ...SUPABASE_HEADERS, "Content-Type": "application/json" }
+  const scores: { domain: string, week: string, score: number }[] = []
+  for (let from = 0; from < 20000; from += 1000) {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?select=domain,pages,actions,native,business&status=is.null&popularity_rank=gt.${from}&popularity_rank=lte.${from + 1000}`, { headers: SUPABASE_HEADERS }).catch(() => null)
+    const rows: any[] = r?.ok ? await r.json() : []
+    for (const site of rows) scores.push({ domain: site.domain, week, score: readiness(site).score })
+  }
+  for (let i = 0; i < scores.length; i += 1000) {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/site_scores?on_conflict=domain,week`, { method: "POST", headers: { ...JSON_HEADERS, "Prefer": "resolution=merge-duplicates,return=minimal" }, body: JSON.stringify(scores.slice(i, i + 1000)) }).catch(() => null)
+    if (!r?.ok) { console.log(`Scores not saved (${r?.status ?? "no answer"}; list_twentyfour.sql)`); return }
+  }
+  const lastWeek = new Date(Date.parse(week + "T00:00:00Z") - 7 * 86400000).toISOString().slice(0, 10)
+  const before = new Map<string, number>()
+  for (let offset = 0; ; offset += 1000) {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/site_scores?select=domain,score&week=eq.${lastWeek}&limit=1000&offset=${offset}`, { headers: SUPABASE_HEADERS }).catch(() => null)
+    const rows: any[] = r?.ok ? await r.json() : []
+    for (const x of rows) before.set(x.domain, x.score)
+    if (rows.length < 1000) break
+  }
+  const movers = scores.filter(s => before.has(s.domain) && s.score > before.get(s.domain)!)
+    .map(s => ({ domain: s.domain, from: before.get(s.domain)!, to: s.score })).sort((a, b) => (b.to - b.from) - (a.to - a.from)).slice(0, 20)
+  const [report] = await fetch(`${SUPABASE_URL}/rest/v1/weekly_reports?select=data&week=eq.${week}`, { headers: SUPABASE_HEADERS }).then(r => r.ok ? r.json() : []).catch(() => [])
+  if (report) await fetch(`${SUPABASE_URL}/rest/v1/weekly_reports?week=eq.${week}`, { method: "PATCH", headers: { ...JSON_HEADERS, "Prefer": "return=minimal" }, body: JSON.stringify({ data: { ...(report.data || {}), movers } }) }).catch(() => {})
+  console.log(`Scores: ${scores.length} sites; ${movers.length} rose since ${lastWeek}${before.size ? "" : " (no scores from last week yet)"}`)
 }
 
 // The weekly email to people who signed up and confirmed (newsletter, list_twentyone.sql). Only on

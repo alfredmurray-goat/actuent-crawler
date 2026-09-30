@@ -21,6 +21,7 @@ const RULES: { table: string, filter: string, why: string }[] = [
   { table: "query_reformulations", filter: `updated_at=lt.${days(180)}`, why: "rewritten searches: 180 days" },
   { table: "name_websites", filter: `checked_at=lt.${days(90)}`, why: "name lookups: 90 days (looked up again when needed)" },
   { table: "search_misses", filter: `checked_at=lt.${days(60)}`, why: "search misses: 60 days" },
+  { table: "site_scores", filter: `week=lt.${days(56).slice(0, 10)}`, why: "weekly scores: 8 weeks" },
   { table: "lawp_events", filter: `start_date=lt.${days(60)}`, why: "past events: 60 days after they start" }
 ]
 
