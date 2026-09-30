@@ -45,6 +45,8 @@ async function report(site: any) {
 }
 
 async function main() {
+  // Merged into the weekly digest (score_emails.ts) on 30 September 2026: one email a week instead of two kinds.
+  if (process.env.SEND_MONTHLY !== "1") { console.log("Monthly reports are part of the weekly digest now (score_emails.ts). Set SEND_MONTHLY=1 to send one anyway."); return }
   if (!emailEnabled) { console.log("RESEND_API_KEY isn't set — skipping monthly reports"); return }
   const sites = await get(`lawp_sites?select=*&owner_key=not.is.null&score_emails=is.true&limit=1000`)
   console.log(`${sites.length} claimed sites get a monthly report`)
