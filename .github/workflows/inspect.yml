@@ -8,6 +8,9 @@ on:
       queries:
         description: 'Searches to time, separated by |'
         required: false
+      names:
+        description: 'Typo check: names to look up (similar_site_name)'
+        default: ''
       sizes:
         description: 'Show database table sizes (1 = yes)'
         required: false
@@ -30,4 +33,5 @@ jobs:
           DOMAINS: ${{ inputs.domains }}
           QUERIES: ${{ inputs.queries }}
           SIZES: ${{ inputs.sizes }}
+          NAMES: ${{ inputs.names }}
           PING: ${{ inputs.ping }}

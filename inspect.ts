@@ -28,6 +28,13 @@ if (process.env.SIZES === "1" || process.env.SIZES === "true") {
   for (const x of rows.sort((a, b) => Number(b.bytes) - Number(a.bytes)).slice(0, 25)) console.log(`size ${String(x.name).padEnd(40)} ${(Number(x.bytes) / 1048576).toFixed(1)} MB`)
   if (!rows.length) console.log(`size: db_size() failed (${r?.status})`)
 }
+// Closest well-known names for typos (similar_site_name): NAMES="ikeaa zalanod".
+for (const n of (process.env.NAMES || "").split(/[\s,]+/).filter(Boolean).slice(0, 10)) {
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/similar_site_name`, { method: "POST", headers: { ...SUPABASE_HEADERS, "Content-Type": "application/json" }, body: JSON.stringify({ q: n }) }).then(x => x.ok ? x.json() : x.status).catch(e => String(e))
+  console.log(`name ${n}: ${JSON.stringify(r)}`)
+  const s = await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?select=domain,name,popularity_rank,status&domain=eq.${n.replace(/(\w)\1+/g, "$1")}.com`, { headers: SUPABASE_HEADERS }).then(x => x.ok ? x.json() : []).catch(() => [])
+  console.log(`  ${n.replace(/(\w)\1+/g, "$1")}.com row: ${JSON.stringify(s)}`)
+}
 // How lawp_sites splits up (counts only): SIZES=1 prints these too.
 if (process.env.SIZES === "1" || process.env.SIZES === "true") {
   const n = async (filter: string) => {
