@@ -166,6 +166,7 @@ async function sendNewsletter(week: string, title: string, summary: string) {
     const html = `${lawpyImg("talk")}<h2 style="margin:0 0 12px">${esc(title)}</h2>
 ${summary.split(/\n+/).filter(Boolean).map(x => `<p>${esc(x)}</p>`).join("")}
 <p><a href="${link}">Read it on the web, with the charts →</a></p>
+<p><strong>Your AI got smarter this week:</strong> <a href="https://api.actuent.ai/smarter">see what Lawpy found →</a></p>
 <p style="color:#666;font-size:13px">Actuent, made by localilabs. You get this because you signed up for the weekly State of the AI web. <a href="${unsubscribe}">Unsubscribe</a></p>`
     if (await sendEmail(p.email, title, html, { "List-Unsubscribe": `<${unsubscribe}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" })) sent++
   }
