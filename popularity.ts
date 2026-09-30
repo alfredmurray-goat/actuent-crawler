@@ -30,8 +30,13 @@ async function main() {
     }
   }
   while (true) {
-    const r = await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?select=domain,popularity_rank&domain=gt.${encodeURIComponent(lastDomain)}&order=domain.asc&limit=1000`, { headers: HEADERS })
-    if (!r.ok) throw new Error(`${r.status} ${await r.text()}`)
+    let r: Response | null = null
+    for (let attempt = 0; attempt < 4; attempt++) {
+      r = await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?select=domain,popularity_rank&domain=gt.${encodeURIComponent(lastDomain)}&order=domain.asc&limit=1000`, { headers: HEADERS }).catch(() => null)
+      if (r?.ok) break
+      await new Promise(res => setTimeout(res, 5000 * (attempt + 1)))
+    }
+    if (!r?.ok) throw new Error(`${r?.status} ${r ? await r.text() : "no answer"}`)
     const rows: { domain: string, popularity_rank: number | null }[] = await r.json()
     if (!rows.length) break
     lastDomain = rows[rows.length - 1].domain
