@@ -28,6 +28,15 @@ if (process.env.SIZES === "1") {
   for (const x of rows.sort((a, b) => Number(b.bytes) - Number(a.bytes)).slice(0, 25)) console.log(`size ${String(x.name).padEnd(40)} ${(Number(x.bytes) / 1048576).toFixed(1)} MB`)
   if (!rows.length) console.log(`size: db_size() failed (${r?.status})`)
 }
+// How lawp_sites splits up (counts only): SIZES=1 prints these too.
+if (process.env.SIZES === "1") {
+  const n = async (filter: string) => {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?select=domain&${filter}`, { method: "HEAD", headers: { ...SUPABASE_HEADERS, "Prefer": "count=estimated", "Range": "0-0" }, signal: AbortSignal.timeout(30000) }).catch(() => null)
+    return r?.headers.get("content-range")?.split("/")[1] ?? "?"
+  }
+  for (const [label, filter] of [["all sites", "domain=not.is.null"], ["hidden (status set)", "status=not.is.null"], ["conversion minimal", "conversion=eq.minimal"], ["conversion heuristic", "conversion=eq.heuristic"], ["conversion llm", "conversion=eq.llm"], ["conversion native", "conversion=eq.native"], ["no conversion recorded", "conversion=is.null"], ["claimed", "owner_key=not.is.null"], ["from OpenStreetMap (business.source)", "business->>source=eq.openstreetmap"], ["popularity rank ≤ 20,000", "popularity_rank=lte.20000"]])
+    console.log(`count ${label.padEnd(40)} ${await n(filter)}`)
+}
 // How long the search functions take for a few searches (QUERIES, separated by "|").
 for (const q of (process.env.QUERIES || "").split("|").map(x => x.trim()).filter(Boolean).slice(0, 10)) {
   for (const fn of ["search_lawp_sites", "search_lawp_pages"]) {
