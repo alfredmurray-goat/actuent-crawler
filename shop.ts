@@ -115,6 +115,27 @@ export async function fetchProducts(domain: string): Promise<Item[]> {
 
 // Saves a shop's products. Price changes keep the previous price on the item and are logged in
 // lawp_item_prices, so agents can say "this dropped 20% this week".
+// Countries a shop ships to, from its shipping policy (Shopify: /policies/shipping-policy): country
+// names in English and the main European languages → two-letter codes. "worldwide" → ["*"].
+const COUNTRY_WORDS: [RegExp, string][] = [
+  [/\b(denmark|danmark|dänemark|danemark)\b/i, "dk"], [/\b(sweden|sverige|schweden|suède)\b/i, "se"], [/\b(norway|norge|norwegen|norvège)\b/i, "no"],
+  [/\b(finland|suomi|finnland)\b/i, "fi"], [/\b(germany|deutschland|tyskland|allemagne)\b/i, "de"], [/\b(netherlands|nederland|holland|niederlande)\b/i, "nl"],
+  [/\b(belgium|belgië|belgique|belgien)\b/i, "be"], [/\b(france|frankrig|frankreich)\b/i, "fr"], [/\b(spain|españa|spanien|espagne)\b/i, "es"],
+  [/\b(italy|italia|italien|italie)\b/i, "it"], [/\b(portugal)\b/i, "pt"], [/\b(austria|österreich|østrig)\b/i, "at"], [/\b(switzerland|schweiz|suisse)\b/i, "ch"],
+  [/\b(poland|polska|polen|pologne)\b/i, "pl"], [/\b(ireland|irland|irlande)\b/i, "ie"], [/\b(united kingdom|uk|great britain|england|storbritannien|großbritannien)\b/i, "gb"],
+  [/\b(united states|usa|u\.s\.|us only|contiguous us|lower 48)\b/i, "us"], [/\b(canada)\b/i, "ca"], [/\b(australia)\b/i, "au"], [/\b(new zealand)\b/i, "nz"], [/\b(japan)\b/i, "jp"]
+]
+export async function shippingCountries(domain: string): Promise<string[] | null> {
+  try {
+    const r = await fetchPublic(`https://${domain}/policies/shipping-policy`, { headers: { "User-Agent": USER_AGENT }, signal: AbortSignal.timeout(6000) })
+    if (!r?.ok || !/html/i.test(r.headers.get("content-type") || "")) return null
+    const text = (await r.text()).replace(/<(script|style)[\s\S]*?<\/\1>/gi, " ").replace(/<[^>]+>/g, " ").slice(0, 60000)
+    if (/\b(worldwide|world-wide|internationally|all countries|verden over|weltweit|dans le monde entier)\b/i.test(text)) return ["*"]
+    const found = COUNTRY_WORDS.filter(([re]) => re.test(text)).map(([, c]) => c)
+    return found.length ? found : null
+  } catch { return null }
+}
+
 export async function saveProducts(domain: string, items: Item[]): Promise<void> {
   const send = (rows: object[]) => fetch(`${SUPABASE_URL}/rest/v1/lawp_items?on_conflict=url`, {
     method: "POST", headers: { ...HEADERS, "Prefer": "resolution=merge-duplicates" }, body: JSON.stringify(rows)
@@ -129,6 +150,11 @@ export async function saveProducts(domain: string, items: Item[]): Promise<void>
     if (withoutOptions.ok) return withoutOptions
     const withoutVariant = await send(rows.map(({ variant_id, options, ...rest }: any) => rest))
     return withoutVariant.ok ? withoutVariant : send(rows.map(({ variant_id, gtin, options, ...rest }: any) => rest))
+  }
+  // Where the shop delivers (lawp_sites.ships_to, list_twentyone.sql); only for Shopify shops, which all have the page.
+  if (items[0]?.source === "shopify") {
+    const ships = await shippingCountries(domain)
+    if (ships) await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?domain=eq.${encodeURIComponent(domain)}`, { method: "PATCH", headers: { ...HEADERS, "Prefer": "return=minimal" }, body: JSON.stringify({ ships_to: ships }) }).catch(() => {})
   }
   try {
     if (items.length) {
