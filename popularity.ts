@@ -18,25 +18,32 @@ async function main() {
   }
   console.log(`${ranks.size} ranked domains`)
   let lastDomain = "", seen = 0, updated = 0
+  // Only ranks that are missing or changed are written, a few hundred at a time (writing all ~100K rows
+  // each run timed out, and rewrote rows for nothing). A busy moment: smaller batches after a pause.
+  async function send(domains: string[], values: number[], size = 250): Promise<void> {
+    for (let i = 0; i < domains.length; i += size) {
+      const u = await fetch(`${SUPABASE_URL}/rest/v1/rpc/set_popularity`, { method: "POST", headers: HEADERS, body: JSON.stringify({ domains: domains.slice(i, i + size), ranks: values.slice(i, i + size) }) })
+      if (u.ok) { updated += Math.min(size, domains.length - i); continue }
+      const text = await u.text()
+      if (size > 25 && /57014|timeout/i.test(text)) { await new Promise(r => setTimeout(r, 5000)); await send(domains.slice(i, i + size), values.slice(i, i + size), Math.floor(size / 4)); continue }
+      throw new Error(`set_popularity: ${u.status} ${text}`)
+    }
+  }
   while (true) {
-    const r = await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?select=domain&domain=gt.${encodeURIComponent(lastDomain)}&order=domain.asc&limit=1000`, { headers: HEADERS })
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?select=domain,popularity_rank&domain=gt.${encodeURIComponent(lastDomain)}&order=domain.asc&limit=1000`, { headers: HEADERS })
     if (!r.ok) throw new Error(`${r.status} ${await r.text()}`)
-    const rows: { domain: string }[] = await r.json()
+    const rows: { domain: string, popularity_rank: number | null }[] = await r.json()
     if (!rows.length) break
     lastDomain = rows[rows.length - 1].domain
     seen += rows.length
     const domains: string[] = [], values: number[] = []
-    for (const { domain } of rows) {
+    for (const { domain, popularity_rank } of rows) {
       const rank = ranks.get(domain) ?? ranks.get(domain.replace(/^www\./, ""))
-      if (rank) { domains.push(domain); values.push(rank) }
+      if (rank && rank !== popularity_rank) { domains.push(domain); values.push(rank) }
     }
-    if (domains.length) {
-      const u = await fetch(`${SUPABASE_URL}/rest/v1/rpc/set_popularity`, { method: "POST", headers: HEADERS, body: JSON.stringify({ domains, ranks: values }) })
-      if (!u.ok) throw new Error(`set_popularity: ${u.status} ${await u.text()}`)
-      updated += domains.length
-    }
+    if (domains.length) await send(domains, values)
   }
-  console.log(`Done: ${seen} sites, ${updated} with a Tranco rank`)
+  console.log(`Done: ${seen} sites, ${updated} ranks added or changed`)
 }
 
 main().catch(e => { console.error(e); process.exit(1) })
