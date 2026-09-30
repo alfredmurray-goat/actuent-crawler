@@ -22,14 +22,14 @@ if (process.env.PING === "1") {
   console.log(`ping: first ${times[0]} ms (new connection), then ${times.slice(1).join(", ")} ms; runner region: ${process.env.RUNNER_REGION || "GitHub-hosted (US)"}`)
 }
 // Database size, biggest tables first (db_size(), list_ten.sql): SIZES=1.
-if (process.env.SIZES === "1") {
+if (process.env.SIZES === "1" || process.env.SIZES === "true") {
   const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/db_size`, { method: "POST", headers: { ...SUPABASE_HEADERS, "Content-Type": "application/json" }, body: "{}", signal: AbortSignal.timeout(30000) }).catch(() => null)
   const rows: any[] = r?.ok ? await r.json() : []
   for (const x of rows.sort((a, b) => Number(b.bytes) - Number(a.bytes)).slice(0, 25)) console.log(`size ${String(x.name).padEnd(40)} ${(Number(x.bytes) / 1048576).toFixed(1)} MB`)
   if (!rows.length) console.log(`size: db_size() failed (${r?.status})`)
 }
 // How lawp_sites splits up (counts only): SIZES=1 prints these too.
-if (process.env.SIZES === "1") {
+if (process.env.SIZES === "1" || process.env.SIZES === "true") {
   const n = async (filter: string) => {
     const r = await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?select=domain&${filter}`, { method: "HEAD", headers: { ...SUPABASE_HEADERS, "Prefer": "count=estimated", "Range": "0-0" }, signal: AbortSignal.timeout(30000) }).catch(() => null)
     return r?.headers.get("content-range")?.split("/")[1] ?? "?"
