@@ -16,6 +16,9 @@ const STAPLES = ["running shoes", "sneakers", "headphones", "laptop", "project m
   "restaurant", "coffee", "barber", "dentist", "hotel", "museum", "pizza", "bakery", "gym"]
 
 async function topSearches(): Promise<string[]> {
+  // Counted in the database (search_trends, list_eighteen.sql) instead of downloading the search log.
+  const t = await fetch(`${SUPABASE_URL}/rest/v1/rpc/search_trends`, { method: "POST", headers: JSON_HEADERS, body: JSON.stringify({ since: new Date(Date.now() - 7 * 86400000).toISOString(), min_count: 1, max_rows: 150 }) }).catch(() => null)
+  if (t?.ok) { const rows: any[] = await t.json(); if (rows.length) return rows.map(r => String(r.query)).filter(q => !/^\S+\.[a-z]{2,}$/.test(q) && q.split(/\s+/).length <= 8) }
   const since = encodeURIComponent(new Date(Date.now() - 7 * 86400000).toISOString())
   const r = await fetch(`${SUPABASE_URL}/rest/v1/searches?select=query&created_at=gte.${since}&order=created_at.desc&limit=20000`, { headers: SUPABASE_HEADERS }).catch(() => null)
   const rows: any[] = r?.ok ? await r.json() : []
@@ -42,6 +45,10 @@ async function main() {
   const flag = await fetch(`${SUPABASE_URL}/rest/v1/crawler_state?id=eq.search_slow_until&select=value`, { headers: SUPABASE_HEADERS }).then(r => r.ok ? r.json() : []).catch(() => [])
   if ((Number(flag?.[0]?.value) || 0) * 60_000 > Date.now()) { console.log("Searches are slow right now: skipping the warm-up this time."); return }
   const queries = [...new Set([...(await topSearches()), ...STAPLES])].slice(0, LIMIT)
+  // First choice: the warm-up runs on Supabase, next to the database (api.actuent.ai/api/warm).
+  const edge = await fetch("https://api.actuent.ai/api/warm", { method: "POST", headers: { "Content-Type": "application/json", "User-Agent": "Actuent-Warm/1.0" }, body: JSON.stringify({ queries }), signal: AbortSignal.timeout(140000) }).catch(() => null)
+  if (edge?.ok) { const d = await edge.json(); console.log(`Warmed ${d.warmed} searches next to the database in ${d.seconds} s. Database time per search: median ${d.median_ms} ms, slowest 5% ${d.p95_ms} ms.`); return }
+  console.log(`Warm-up next to the database didn't answer (${edge?.status ?? "no answer"}): warming from here instead.`)
   const times: number[] = []
   let index = 0
   // Two at a time: enough to finish in a few minutes, not so many that it slows real searches.
