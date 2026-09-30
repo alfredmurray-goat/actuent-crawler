@@ -1,0 +1,19 @@
+name: Usage Watchdog
+# Weekly: warns (fails, so GitHub emails the owner) when Actuent heads for a free-plan limit.
+on:
+  schedule:
+    - cron: '30 7 * * 1'
+  workflow_dispatch:
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm install
+      - run: npx tsx usage_watchdog.ts
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
