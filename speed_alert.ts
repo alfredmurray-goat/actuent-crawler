@@ -7,7 +7,19 @@ import { markSearchSlow } from "./quiet"
 if (!process.env.SUPABASE_SERVICE_KEY) { console.error("Missing SUPABASE_SERVICE_KEY"); process.exit(1) }
 const LIMIT_MS = parseInt(process.env.P95_LIMIT_MS || "3000")
 
+// Status history (api.actuent.ai/status): does search answer right now, and how fast? One row an hour
+// in uptime_checks (list_nineteen.sql). "Actuent-Smoke" searches are logged as tests, not real ones.
+async function recordUptime() {
+  const t = Date.now()
+  const r = await fetch("https://api.actuent.ai/api/search?q=nike&_=" + t, { headers: { "User-Agent": "Actuent-Smoke/1.0 (status)" }, signal: AbortSignal.timeout(20000) }).catch(() => null)
+  const body = r?.ok ? await r.json().catch(() => null) : null
+  const ok = !!body && Array.isArray(body.results) && body.results.length > 0
+  await fetch(`${SUPABASE_URL}/rest/v1/uptime_checks`, { method: "POST", headers: { ...SUPABASE_HEADERS, "Content-Type": "application/json", "Prefer": "return=minimal" }, body: JSON.stringify({ ok, ms: Date.now() - t }) }).catch(() => {})
+  console.log(`Status check: search ${ok ? "answered" : "did NOT answer"} in ${Date.now() - t} ms`)
+}
+
 async function main() {
+  await recordUptime()
   const since = encodeURIComponent(new Date(Date.now() - 3600_000).toISOString())
   const r = await fetch(`${SUPABASE_URL}/rest/v1/searches?select=duration_ms&created_at=gte.${since}&duration_ms=not.is.null&limit=10000`, { headers: SUPABASE_HEADERS })
   const times = (r.ok ? await r.json() : []).map((x: any) => Number(x.duration_ms)).sort((a: number, b: number) => a - b)
