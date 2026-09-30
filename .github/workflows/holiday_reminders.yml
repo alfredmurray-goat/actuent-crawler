@@ -1,0 +1,20 @@
+name: Holiday Hours Reminders
+on:
+  schedule:
+    - cron: '0 9 * * 1'
+  workflow_dispatch:
+jobs:
+  alerts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm install
+      - run: npx tsx holiday_reminders.ts
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
