@@ -63,10 +63,34 @@ async function slashDuplicates(): Promise<number> {
   return rows.length
 }
 
+// "www.nike.com" and "nike.com" are the same site: the www. copy is hidden as a duplicate of the bare
+// one (unless the www. copy is claimed or publishes its own LAWP and the bare one doesn't).
+async function wwwDuplicates(): Promise<number> {
+  let hidden = 0, last = "www."
+  for (let round = 0; round < 200; round++) {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?select=domain,owner_key,native&domain=like.www.*&domain=gt.${encodeURIComponent(last)}&status=is.null&order=domain.asc&limit=500`, { headers: HEADERS }).catch(() => null)
+    const rows: any[] = r?.ok ? await r.json() : []
+    if (!rows.length) break
+    last = rows[rows.length - 1].domain
+    const bare = rows.map(x => x.domain.slice(4))
+    const b = await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?select=domain,owner_key,native&domain=in.(${encodeURIComponent(bare.map(d => `"${d}"`).join(","))})&status=is.null`, { headers: HEADERS }).catch(() => null)
+    const have = new Map<string, any>(((b?.ok ? await b.json() : []) as any[]).map(x => [x.domain, x]))
+    for (const w of rows) {
+      const plain = have.get(w.domain.slice(4))
+      if (!plain || ((w.owner_key || w.native) && !(plain.owner_key || plain.native))) continue
+      await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?domain=eq.${encodeURIComponent(w.domain)}`, { method: "PATCH", headers: { ...HEADERS, "Content-Type": "application/json", "Prefer": "return=minimal" }, body: JSON.stringify({ status: "duplicate", duplicate_of: plain.domain }) }).catch(() => {})
+      hidden++
+    }
+    if (rows.length < 500) break
+  }
+  return hidden
+}
+
 async function main() {
   if (launchWeekPause()) return
   const start = Date.now()
   console.log(`${await slashDuplicates()} rows with a slash in the domain hidden as duplicates`)
+  console.log(`${await wwwDuplicates()} www. copies hidden as duplicates of the bare domain`)
   let checked = 0, parked = 0, duplicates = 0
   while (Date.now() - start < TIME_BUDGET_MS) {
     const r = await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?select=domain,name,pages,owner_key,native&checked_at=is.null&order=domain.asc&limit=300`, { headers: HEADERS })
