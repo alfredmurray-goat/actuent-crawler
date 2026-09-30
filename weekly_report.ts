@@ -1,4 +1,5 @@
 import { SUPABASE_URL, SUPABASE_HEADERS } from "./shared"
+import { sendEmail, esc, emailEnabled, lawpyImg } from "./email"
 
 // Weekly "State of the AI web" post, every Monday: how much of the web AI agents can read and act
 // on, what changed since last week, what agents searched for. Numbers from the index; the text is
@@ -116,6 +117,27 @@ async function main() {
   })
   if (!r.ok) throw new Error(`Could not save the report: ${r.status} ${await r.text()}`)
   console.log(`${title}\n\n${summary}`)
+  await sendNewsletter(week, title, summary)
+}
+
+// The weekly email to people who signed up and confirmed (newsletter, list_twentyone.sql). Only on
+// the Monday schedule (or SEND_NEWSLETTER=1), so re-running the report never sends twice. Resend's
+// free plan allows 100 emails a day: at most 90 go out per run.
+async function sendNewsletter(week: string, title: string, summary: string) {
+  if (!emailEnabled || (process.env.GITHUB_EVENT_NAME !== "schedule" && process.env.SEND_NEWSLETTER !== "1")) return
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/newsletter?select=email,token&confirmed_at=not.is.null&unsubscribed_at=is.null&limit=90`, { headers: SUPABASE_HEADERS }).catch(() => null)
+  const people: any[] = r?.ok ? await r.json() : []
+  const link = `https://api.actuent.ai/state/weekly/${week}`
+  let sent = 0
+  for (const p of people) {
+    const unsubscribe = `https://api.actuent.ai/api/newsletter?unsubscribe=${p.token}`
+    const html = `${lawpyImg("talk")}<h2 style="margin:0 0 12px">${esc(title)}</h2>
+${summary.split(/\n+/).filter(Boolean).map(x => `<p>${esc(x)}</p>`).join("")}
+<p><a href="${link}">Read it on the web, with the charts →</a></p>
+<p style="color:#666;font-size:13px">Actuent, made by localilabs. You get this because you signed up for the weekly State of the AI web. <a href="${unsubscribe}">Unsubscribe</a></p>`
+    if (await sendEmail(p.email, title, html, { "List-Unsubscribe": `<${unsubscribe}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" })) sent++
+  }
+  console.log(`Newsletter: sent to ${sent} of ${people.length} subscribers`)
 }
 
 main().catch(e => { console.error(e); process.exit(1) })
