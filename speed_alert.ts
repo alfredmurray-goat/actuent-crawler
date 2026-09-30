@@ -14,8 +14,14 @@ async function recordUptime() {
   const r = await fetch("https://api.actuent.ai/api/search?q=nike&_=" + t, { headers: { "User-Agent": "Actuent-Smoke/1.0 (status)" }, signal: AbortSignal.timeout(20000) }).catch(() => null)
   const body = r?.ok ? await r.json().catch(() => null) : null
   const ok = !!body && Array.isArray(body.results) && body.results.length > 0
-  await fetch(`${SUPABASE_URL}/rest/v1/uptime_checks`, { method: "POST", headers: { ...SUPABASE_HEADERS, "Content-Type": "application/json", "Prefer": "return=minimal" }, body: JSON.stringify({ ok, ms: Date.now() - t }) }).catch(() => {})
-  console.log(`Status check: search ${ok ? "answered" : "did NOT answer"} in ${Date.now() - t} ms`)
+  const ms = Date.now() - t
+  // The other parts people and agents use: a site page, autocomplete and a badge (list_twentyfour.sql).
+  const time = async (url: string) => { const t0 = Date.now(); const x = await fetch(url, { headers: { "User-Agent": "Actuent-Smoke/1.0 (status)" }, signal: AbortSignal.timeout(20000) }).catch(() => null); if (x) await x.arrayBuffer().catch(() => null); return x?.ok ? Date.now() - t0 : null }
+  const [site_ms, autocomplete_ms, badge_ms] = await Promise.all([time(`https://api.actuent.ai/site/nike.com?_=${t}`), time(`https://api.actuent.ai/api/autocomplete?q=nik&_=${t}`), time(`https://api.actuent.ai/badge.svg?domain=nike.com&_=${t}`)])
+  const post = (row: object) => fetch(`${SUPABASE_URL}/rest/v1/uptime_checks`, { method: "POST", headers: { ...SUPABASE_HEADERS, "Content-Type": "application/json", "Prefer": "return=minimal" }, body: JSON.stringify(row) }).catch(() => null)
+  const saved = await post({ ok, ms, site_ms, autocomplete_ms, badge_ms })
+  if (!saved?.ok) await post({ ok, ms })
+  console.log(`Status check: search ${ok ? "answered" : "did NOT answer"} in ${ms} ms; site page ${site_ms} ms, autocomplete ${autocomplete_ms} ms, badge ${badge_ms} ms`)
 }
 
 async function main() {
