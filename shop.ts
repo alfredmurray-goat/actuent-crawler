@@ -18,6 +18,23 @@ export type Item = {
   gtin?: string | null
   // Shopify variant id: lets agents hand over a ready cart (https://shop/cart/<variant>:<qty>).
   variant_id?: string | null
+  // Sizes and colours that are in stock, e.g. { size: ["42", "43"], colour: ["Black"] } (list_nineteen.sql).
+  options?: { size?: string[], colour?: string[] } | null
+}
+
+const SIZE_NAME = /^(size|sizes|størrelse|str|größe|grösse|taille|talla|storlek|koko|maat|taglia|shoe size|eu size)$/i
+const COLOUR_NAME = /^(colou?rs?|farve|farbe|couleur|färg|väri|kleur|colore)$/i
+// In-stock sizes and colours from a Shopify product's options and variants.
+export function shopifyOptions(p: any): Item["options"] {
+  const out: { size?: string[], colour?: string[] } = {}
+  for (const o of p.options || []) {
+    const key = SIZE_NAME.test(String(o.name || "").trim()) ? "size" : COLOUR_NAME.test(String(o.name || "").trim()) ? "colour" : null
+    if (!key) continue
+    const field = `option${o.position || 1}`
+    const inStock = new Set((p.variants || []).filter((v: any) => v.available !== false).map((v: any) => String(v[field] ?? "").trim()).filter(Boolean))
+    if (inStock.size) out[key] = [...inStock].slice(0, 40) as string[]
+  }
+  return out.size || out.colour ? out : null
 }
 
 async function getJson(url: string, timeoutMs = 6000): Promise<any | null> {
@@ -58,6 +75,7 @@ async function shopifyItems(domain: string): Promise<Item[] | null> {
       available: (p.variants || []).some((v: any) => v.available !== false),
       gtin: /^\d{8,14}$/.test(String(variant.barcode || "").trim()) ? String(variant.barcode).trim() : null,
       variant_id: variant.id != null ? String(variant.id) : null,
+      options: shopifyOptions(p),
       source: "shopify"
     }
   })
@@ -73,7 +91,17 @@ async function wooItems(domain: string): Promise<Item[] | null> {
       domain, url: p.permalink, name: String(p.name || "").replace(/<[^>]+>/g, "").slice(0, 200),
       price: Number.isFinite(raw) ? raw : null, currency: p.prices?.currency_code || null, price_eur: null,
       image: p.images?.[0]?.src || null, available: p.is_in_stock !== false, source: "woocommerce",
-      gtin: /^\d{8,14}$/.test(String(p.sku || "").trim()) ? String(p.sku).trim() : null
+      gtin: /^\d{8,14}$/.test(String(p.sku || "").trim()) ? String(p.sku).trim() : null,
+      // WooCommerce lists attribute values, not per-size stock.
+      options: (() => {
+        const o: { size?: string[], colour?: string[] } = {}
+        for (const a of p.attributes || []) {
+          const key = SIZE_NAME.test(String(a.name || "").trim()) ? "size" : COLOUR_NAME.test(String(a.name || "").trim()) ? "colour" : null
+          const values = (a.terms || []).map((t: any) => String(t.name || "").trim()).filter(Boolean)
+          if (key && values.length) o[key] = values.slice(0, 40)
+        }
+        return o.size || o.colour ? o : null
+      })()
     }
   }).filter((i: Item) => i.url)
 }
@@ -96,8 +124,11 @@ export async function saveProducts(domain: string, items: Item[]): Promise<void>
     const res = await send(rows)
     // Newest columns first (variant_id: list_seven.sql, gtin: next_list.sql).
     if (res.ok) return res
-    const withoutVariant = await send(rows.map(({ variant_id, ...rest }: any) => rest))
-    return withoutVariant.ok ? withoutVariant : send(rows.map(({ variant_id, gtin, ...rest }: any) => rest))
+    // Before list_nineteen.sql: without the sizes and colours.
+    const withoutOptions = await send(rows.map(({ options, ...rest }: any) => rest))
+    if (withoutOptions.ok) return withoutOptions
+    const withoutVariant = await send(rows.map(({ variant_id, options, ...rest }: any) => rest))
+    return withoutVariant.ok ? withoutVariant : send(rows.map(({ variant_id, gtin, options, ...rest }: any) => rest))
   }
   try {
     if (items.length) {
