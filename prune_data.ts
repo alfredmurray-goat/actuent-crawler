@@ -28,6 +28,14 @@ const RULES: { table: string, filter: string, why: string }[] = [
 // actions are cleared (the row stays, so they aren't crawled again as new), which frees space.
 // Product price history: everything from the last 30 days, then one price a week (thin_price_history,
 // list_twentyone.sql). Keeps the 90-day price charts and "lowest in 90 days" right.
+// Minimal sites over 30 days old that nobody searched for (sweep_minimal, list_twentythree.sql): onto
+// the skip list, first week of each month.
+async function sweepMinimal(): Promise<void> {
+  if (DRY || new Date().getUTCDate() > 7) return
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/sweep_minimal`, { method: "POST", headers: { ...SUPABASE_HEADERS, "Content-Type": "application/json" }, body: JSON.stringify({ max_rows: 5000 }), signal: AbortSignal.timeout(120000) }).catch(() => null)
+  console.log(r?.ok ? `minimal sites: ${await r.json()} swept onto the skip list` : `minimal sites: not swept (${r?.status ?? "no answer"}; list_twentythree.sql)`)
+}
+
 async function thinPrices(): Promise<void> {
   if (DRY) { console.log("price history thinning: skipped (dry run)"); return }
   const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/thin_price_history`, { method: "POST", headers: { ...SUPABASE_HEADERS, "Content-Type": "application/json" }, body: "{}", signal: AbortSignal.timeout(120000) }).catch(() => null)
@@ -61,6 +69,7 @@ async function countRows(table: string, filter: string): Promise<number | null> 
 async function main() {
   await emptyHidden()
   await thinPrices()
+  await sweepMinimal()
   for (const { table, filter, why } of RULES) {
     const n = await countRows(table, filter)
     if (n === null) { console.log(`${table}: not available, skipped`); continue }
