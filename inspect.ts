@@ -38,6 +38,8 @@ if (process.env.SIZES === "1" || process.env.SIZES === "true") {
     console.log(`count ${label.padEnd(40)} ${await n(filter)}`)
   const cols = await fetch(`${SUPABASE_URL}/rest/v1/rpc/lawp_sites_column_sizes`, { method: "POST", headers: { ...SUPABASE_HEADERS, "Content-Type": "application/json" }, body: "{}", signal: AbortSignal.timeout(60000) }).then(x => x.ok ? x.json() : null).catch(() => null)
   for (const c of (cols || []).sort((a: any, b: any) => b.estimated_mb - a.estimated_mb)) console.log(`column ${String(c.column_name).padEnd(28)} avg ${c.avg_bytes} B, ~${c.estimated_mb} MB`)
+  const idx = await fetch(`${SUPABASE_URL}/rest/v1/rpc/index_usage`, { method: "POST", headers: { ...SUPABASE_HEADERS, "Content-Type": "application/json" }, body: "{}", signal: AbortSignal.timeout(30000) }).then(x => x.ok ? x.json() : null).catch(() => null)
+  for (const i of idx || []) console.log(`index ${String(i.table_name).padEnd(18)} ${String(i.index_name).padEnd(40)} ${(Number(i.bytes) / 1048576).toFixed(1)} MB, used ${i.scans} times`)
 }
 // How long the search functions take for a few searches (QUERIES, separated by "|").
 for (const q of (process.env.QUERIES || "").split("|").map(x => x.trim()).filter(Boolean).slice(0, 10)) {
