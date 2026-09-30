@@ -55,7 +55,8 @@ async function main() {
 <p><strong>${esc(site.name || site.domain)}</strong> is <strong>${score}/100</strong> agent-ready this week${esc(change)}: ${esc(label.toLowerCase())}.</p>
 ${bots ? `<p>AI bots visited ${bots.total} times in the last 7 days (${bots.top.map(([b, n]) => `${esc(b)} ${n}`).join(", ")}).</p>` : ""}
 ${vs ? `<p>Among ${vs.total} similar sites (${esc(CATEGORIES[vs.category] || vs.category)}${vs.city ? ` in ${esc(vs.city)}` : ""}) you're <strong>#${vs.rank}</strong>.${vs.they_have[0] ? ` ${vs.they_have[0].count} of them have something you don't: ${esc(vs.they_have[0].label.toLowerCase())}.` : ""}</p>` : ""}
-${next ? `<p><strong>Your next step (+${next.points} points):</strong> ${esc(next.label)}.<br>${next.fix}</p>` : `<p>Every check passes. Nice work.</p>`}
+${next ? `<p><strong>Your next step (+${next.points} points):</strong> ${esc(next.label)}.<br>${next.fix}</p>
+<p><a href="https://docs.actuent.ai/checklist?domain=${encodeURIComponent(site.domain)}">Step-by-step for Shopify, Squarespace, Wix, Webflow and WordPress, checked live →</a></p>` : `<p>Every check passes. Nice work.</p>`}
 <p><a href="${page}">See your full score and starter files →</a></p>
 <p style="color:#666;font-size:13px">Actuent, made by localilabs. You get this weekly because you claimed ${esc(site.domain)} on Actuent. <a href="${unsubscribe}">Unsubscribe</a></p>`
       const ok = await sendEmail(account.email, `${site.domain}: ${score}/100 agent-ready${change}`, html, { "List-Unsubscribe": `<${unsubscribe}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" })
