@@ -70,6 +70,12 @@ async function filterUncrawled(domains: string[]): Promise<string[]> {
       if (!r.ok) throw new Error(`${r.status} ${await r.text()}`)
       const rows: { domain: string }[] = await r.json()
       const existing = new Set(rows.map(row => row.domain))
+      // Sites deleted to save space (skipped_domains, list_twenty.sql: sites Actuent couldn't read)
+      // aren't crawled again by the mass crawler; a search for one still crawls it.
+      const skipped = await fetch(`${SUPABASE_URL}/rest/v1/skipped_domains?select=domain&domain=in.(${encodeURIComponent(list)})`, {
+        headers: { "apikey": SUPABASE_SERVICE_KEY, "Authorization": `Bearer ${SUPABASE_SERVICE_KEY}` }
+      }).then(x => x.ok ? x.json() : []).catch(() => [])
+      for (const row of skipped as { domain: string }[]) existing.add(row.domain)
       return domains.filter(d => !existing.has(d))
     } catch (e) {
       console.log(`existence check failed (attempt ${attempt + 1}): ${e}`)
