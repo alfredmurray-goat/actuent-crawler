@@ -36,6 +36,8 @@ if (process.env.SIZES === "1" || process.env.SIZES === "true") {
   }
   for (const [label, filter] of [["all sites", "domain=not.is.null"], ["hidden (status set)", "status=not.is.null"], ["conversion minimal", "conversion=eq.minimal"], ["conversion heuristic", "conversion=eq.heuristic"], ["conversion llm", "conversion=eq.llm"], ["conversion native", "conversion=eq.native"], ["no conversion recorded", "conversion=is.null"], ["claimed", "owner_key=not.is.null"], ["from OpenStreetMap (business.source)", "business->>source=eq.openstreetmap"], ["popularity rank ≤ 20,000", "popularity_rank=lte.20000"]])
     console.log(`count ${label.padEnd(40)} ${await n(filter)}`)
+  const cols = await fetch(`${SUPABASE_URL}/rest/v1/rpc/lawp_sites_column_sizes`, { method: "POST", headers: { ...SUPABASE_HEADERS, "Content-Type": "application/json" }, body: "{}", signal: AbortSignal.timeout(60000) }).then(x => x.ok ? x.json() : null).catch(() => null)
+  for (const c of (cols || []).sort((a: any, b: any) => b.estimated_mb - a.estimated_mb)) console.log(`column ${String(c.column_name).padEnd(28)} avg ${c.avg_bytes} B, ~${c.estimated_mb} MB`)
 }
 // How long the search functions take for a few searches (QUERIES, separated by "|").
 for (const q of (process.env.QUERIES || "").split("|").map(x => x.trim()).filter(Boolean).slice(0, 10)) {

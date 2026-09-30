@@ -45,6 +45,18 @@ async function main() {
     const weeksLeft = weekly && weekly > 0 ? (DB_LIMIT - total) / weekly : null
     console.log(`Database: ${(total / 1048576).toFixed(0)} MB of 500 MB (${pct(total / DB_LIMIT)})${weekly != null ? `, ${weekly >= 0 ? "+" : ""}${(weekly / 1048576).toFixed(1)} MB a week` : ""}${weeksLeft != null ? `, full in about ${weeksLeft.toFixed(0)} weeks at this pace` : ""}`)
     console.log(`  Biggest: ${sizes.filter(s => s.name !== "(total)").slice(0, 5).map(s => `${s.name} ${(Number(s.bytes) / 1048576).toFixed(0)} MB`).join(", ")}`)
+    // Everything in every schema (db_size_all, list_twenty.sql): space that isn't in any table is
+    // a vacuum's temporary copy or something outside Actuent's tables, and it counts too.
+    const all = await fetch(`${SUPABASE_URL}/rest/v1/rpc/db_size_all`, { method: "POST", headers: JSON_HEADERS, body: "{}" }).then(x => x.ok ? x.json() : null).catch(() => null)
+    if (Array.isArray(all)) {
+      const inTables = all.reduce((n: number, t: any) => n + Number(t.bytes), 0)
+      const other = total - inTables
+      const outside = all.filter((t: any) => t.schema_name !== "public").reduce((n: number, t: any) => n + Number(t.bytes), 0)
+      console.log(`  In tables: ${(inTables / 1048576).toFixed(0)} MB (outside Actuent's own tables: ${(outside / 1048576).toFixed(0)} MB); not in any table: ${(other / 1048576).toFixed(0)} MB`)
+      if (other > 100 * 1048576) warnings.push(`${(other / 1048576).toFixed(0)} MB of the database isn't in any table: usually a vacuum still running or stopped half-way. Check Supabase → Database → Query performance, or run list_twenty.sql Part 1`)
+    }
+    const cols = await fetch(`${SUPABASE_URL}/rest/v1/rpc/lawp_sites_column_sizes`, { method: "POST", headers: JSON_HEADERS, body: "{}" }).then(x => x.ok ? x.json() : null).catch(() => null)
+    if (Array.isArray(cols)) console.log(`  lawp_sites by column: ${cols.filter((c: any) => c.estimated_mb >= 2).sort((a: any, b: any) => b.estimated_mb - a.estimated_mb).map((c: any) => `${c.column_name} ~${c.estimated_mb} MB`).join(", ")}`)
     if (total / DB_LIMIT >= WARN) warnings.push(`Database is ${pct(total / DB_LIMIT)} full (${(total / 1048576).toFixed(0)} MB of 500 MB)`)
     if (weeksLeft != null && weeksLeft < 6) warnings.push(`Database fills up in about ${weeksLeft.toFixed(0)} weeks at this week's pace`)
     await setState("watchdog_db_bytes", { bytes: total, at: now.toISOString() })

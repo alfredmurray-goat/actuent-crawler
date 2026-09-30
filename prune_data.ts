@@ -26,6 +26,14 @@ const RULES: { table: string, filter: string, why: string }[] = [
 
 // Hidden sites (parked, unreachable, duplicates) never show up in search: their page text and
 // actions are cleared (the row stays, so they aren't crawled again as new), which frees space.
+// Product price history: everything from the last 30 days, then one price a week (thin_price_history,
+// list_twentyone.sql). Keeps the 90-day price charts and "lowest in 90 days" right.
+async function thinPrices(): Promise<void> {
+  if (DRY) { console.log("price history thinning: skipped (dry run)"); return }
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/thin_price_history`, { method: "POST", headers: { ...SUPABASE_HEADERS, "Content-Type": "application/json" }, body: "{}", signal: AbortSignal.timeout(120000) }).catch(() => null)
+  console.log(r?.ok ? `price history: ${await r.json()} older prices thinned to one a week` : `price history: not thinned (${r?.status ?? "no answer"}; list_twentyone.sql)`)
+}
+
 async function emptyHidden(): Promise<void> {
   if (DRY) { console.log("hidden sites: skipped (dry run)"); return }
   let total = 0
@@ -52,6 +60,7 @@ async function countRows(table: string, filter: string): Promise<number | null> 
 
 async function main() {
   await emptyHidden()
+  await thinPrices()
   for (const { table, filter, why } of RULES) {
     const n = await countRows(table, filter)
     if (n === null) { console.log(`${table}: not available, skipped`); continue }
