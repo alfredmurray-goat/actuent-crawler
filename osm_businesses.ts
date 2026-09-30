@@ -1,6 +1,7 @@
 import { SUPABASE_URL, SUPABASE_HEADERS, fetchSite, saveSite, saveEvents, robotsAllows } from "./shared"
 import { searchNeedsTheDatabase, tooFullToGrow } from "./quiet"
 import { heuristicLAWP, withBookingLinks } from "./heuristic"
+import { calendarLinks, parseIcal } from "./ical"
 import { extractBusiness, extractEvents, Business, OpeningHours } from "./business"
 import { rescue } from "./rescue"
 import { cleanPages } from "./boilerplate"
@@ -258,8 +259,19 @@ export async function venueEvents(domain: string): Promise<number> {
     if (!await robotsAllows(domain, path)) continue
     const r = await fetchPublic(`https://${domain}${path}`, { headers: { "User-Agent": USER_AGENT, "Accept": "text/html" }, signal: AbortSignal.timeout(8000) }).catch(() => null)
     if (!r?.ok || !(r.headers.get("content-type") || "").includes("html")) continue
-    const events = extractEvents((await r.text()).slice(0, 600_000), r.url)
+    const html = (await r.text()).slice(0, 600_000)
+    const events = extractEvents(html, r.url)
     if (events.length) { await saveEvents(domain, events); saved += events.length }
+    // Calendar feeds (.ics / webcal://) linked from the page: often the only machine-readable listing.
+    if (!events.length) for (const feed of calendarLinks(html, r.url)) {
+      if (new URL(feed).hostname.replace(/^www\./, "") !== domain.replace(/^www\./, "") && !/calendar|events|tickets/i.test(feed)) continue
+      const f = await fetchPublic(feed, { headers: { "User-Agent": USER_AGENT }, signal: AbortSignal.timeout(8000) }).catch(() => null)
+      const text = f?.ok ? (await f.text()).slice(0, 2_000_000) : ""
+      if (!/BEGIN:VCALENDAR/.test(text)) continue
+      const fromFeed = parseIcal(text, feed)
+      if (fromFeed.length) { await saveEvents(domain, fromFeed); saved += fromFeed.length; console.log(`  ${fromFeed.length} events from ${domain}'s calendar feed`) }
+      break
+    }
     if (saved >= 60) break
   }
   return saved
