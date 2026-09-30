@@ -43,3 +43,20 @@ export function launchWeekPause(): boolean {
   if (paused) console.log("Launch week (14–21 October): this job is paused so searches get the whole database. Set IGNORE_PAUSE=1 to run it anyway.")
   return paused
 }
+
+// How full the free 500 MB database is (0–1), or null when it can't be told. Jobs that add new
+// rows stop well before it's full: at 100% Supabase makes the database read-only, and search breaks.
+export async function databaseFullness(): Promise<number | null> {
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/db_size`, { method: "POST", headers: { ...SUPABASE_HEADERS, "Content-Type": "application/json" }, body: "{}" }).catch(() => null)
+  const rows: any[] = r?.ok ? await r.json() : []
+  const total = Number(rows.find(x => x.name === "(total)")?.bytes || 0)
+  return total ? total / (500 * 1024 * 1024) : null
+}
+export async function tooFullToGrow(limit: number): Promise<boolean> {
+  const full = await databaseFullness()
+  if (full != null && full >= limit && process.env.IGNORE_DB_SIZE !== "1") {
+    console.log(`The database is ${Math.round(full * 100)}% full: not adding new sites or products (limit ${Math.round(limit * 100)}%). Existing ones still get refreshed. Set IGNORE_DB_SIZE=1 to add anyway.`)
+    return true
+  }
+  return false
+}

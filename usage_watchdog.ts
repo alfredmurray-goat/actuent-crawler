@@ -52,10 +52,11 @@ async function main() {
 
   // 2. Vercel: search time this month (real searches, not our own tests).
   let searchMs = 0, searches = 0
-  for (let offset = 0; offset < 200000; offset += 10000) {
-    const page = await rows(`searches?select=duration_ms&created_at=gte.${encodeURIComponent(monthStart.toISOString())}&duration_ms=not.is.null&tier=neq.test&order=created_at.asc&limit=10000&offset=${offset}`)
+  // Supabase returns at most 1,000 rows per request.
+  for (let offset = 0; offset < 300000; offset += 1000) {
+    const page = await rows(`searches?select=duration_ms&created_at=gte.${encodeURIComponent(monthStart.toISOString())}&duration_ms=not.is.null&tier=neq.test&order=created_at.asc&limit=1000&offset=${offset}`)
     for (const s of page) { searchMs += Number(s.duration_ms) || 0; searches++ }
-    if (page.length < 10000) break
+    if (page.length < 1000) break
   }
   const gbHours = searchMs / 3600000 * VERCEL_MEMORY_GB
   const projected = monthFraction > 0.05 ? gbHours / monthFraction : null

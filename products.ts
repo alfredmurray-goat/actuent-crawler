@@ -1,7 +1,7 @@
 import fs from "fs"
 import readline from "readline"
 import { SUPABASE_URL, SUPABASE_HEADERS, robotsAllows } from "./shared"
-import { searchNeedsTheDatabase } from "./quiet"
+import { searchNeedsTheDatabase, tooFullToGrow } from "./quiet"
 import { fetchProducts, saveProducts } from "./shop"
 import { checkWatches } from "./watches"
 
@@ -73,8 +73,10 @@ async function main() {
     }
   } catch (e) { console.log(`country shops: ${e}`) }
 
-  console.log(`Checking the top ${domains.length} sites for shops`)
-  for (let i = 0; i < domains.length && Date.now() - start < TIME_BUDGET_MS && !await searchNeedsTheDatabase(); i += CHUNK) {
+  // The long tail of shops adds the most rows: it waits while the database is nearly full.
+  const growing = !await tooFullToGrow(0.85)
+  if (growing) console.log(`Checking the top ${domains.length} sites for shops`)
+  for (let i = 0; growing && i < domains.length && Date.now() - start < TIME_BUDGET_MS && !await searchNeedsTheDatabase(); i += CHUNK) {
     const todo = await due(domains.slice(i, i + CHUNK))
     let index = 0
     await Promise.all(Array.from({ length: CONCURRENCY }, async () => {

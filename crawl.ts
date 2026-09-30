@@ -1,5 +1,5 @@
 import { SUPABASE_URL, SUPABASE_SERVICE_KEY, fetchNative, fetchSite, minimal, saveSite, saveEvents, contentHash, robotsAllows } from "./shared"
-import { searchNeedsTheDatabase } from "./quiet"
+import { searchNeedsTheDatabase, tooFullToGrow } from "./quiet"
 import { INFRASTRUCTURE } from "./heuristic"
 import { extractEvents } from "./business"
 import { fetchLlmsTxt } from "./llmstxt"
@@ -184,6 +184,7 @@ async function backlogRemaining(): Promise<number | null> {
 }
 
 async function main() {
+  if (await tooFullToGrow(0.8)) return
   if (process.env.IGNORE_BACKLOG !== "true") {
     const remaining = await backlogRemaining()
     if (remaining && remaining > 0) {

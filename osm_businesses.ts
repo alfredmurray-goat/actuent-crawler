@@ -1,5 +1,5 @@
 import { SUPABASE_URL, SUPABASE_HEADERS, fetchSite, saveSite, saveEvents, robotsAllows } from "./shared"
-import { searchNeedsTheDatabase } from "./quiet"
+import { searchNeedsTheDatabase, tooFullToGrow } from "./quiet"
 import { heuristicLAWP, withBookingLinks } from "./heuristic"
 import { extractBusiness, extractEvents, Business, OpeningHours } from "./business"
 import { rescue } from "./rescue"
@@ -306,6 +306,7 @@ async function city([name, lat, lon, country]: typeof CITIES[number]): Promise<b
 }
 
 async function main() {
+  if (await tooFullToGrow(0.8)) return
   if (!process.env.SUPABASE_SERVICE_KEY) { console.error("Missing SUPABASE_SERVICE_KEY"); process.exit(1) }
   let at = await state("osm_city")
   for (let n = 0; n < CITIES_PER_RUN && Date.now() - started < TIME_BUDGET_MS && !await searchNeedsTheDatabase(); n++) {
