@@ -202,8 +202,12 @@ async function main() {
   const csvPath = "./tranco_PY69J.csv"
   if (!fs.existsSync(csvPath)) { console.error("CSV not found: " + csvPath); process.exit(1) }
   console.log("Loading CSV...")
-  const all = await loadCSV(csvPath)
-  console.log("Total: " + all.length)
+  // Only the best-known 100,000 domains are crawled ahead of time: further down the list most
+  // sites are never searched for, and each one costs database space. A search for any other site
+  // still crawls it on demand (crawl_queue, live crawler). MAX_RANK changes the cut-off.
+  const MAX_RANK = parseInt(process.env.MAX_RANK || "100000")
+  const all = (await loadCSV(csvPath)).slice(0, MAX_RANK)
+  console.log(`Total: ${all.length} (the top ${MAX_RANK.toLocaleString()})`)
   let pos = await getOffset()
   if (pos >= all.length) pos = 0
   console.log(`Offset: ${pos} — crawling up to ${CRAWL_LIMIT} new sites, ${TIME_BUDGET_MS / 60000} min budget`)
