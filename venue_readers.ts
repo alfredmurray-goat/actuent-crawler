@@ -1,7 +1,8 @@
 import { saveEvents, robotsAllows } from "./shared"
 import { USER_AGENT } from "./robots"
+import { extractEvents } from "./business"
 
-// Readers for big Copenhagen venues whose concerts aren't published as schema.org events (so the
+// Readers for big venues whose concerts aren't published as schema.org events (so the
 // generic venue_events reader finds nothing): each reads the venue's own listing (its CMS API, the
 // JSON in its calendar page, or its concert pages) and saves to lawp_events like any other event.
 // Run from venue_events.ts, or alone: npx tsx venue_readers.ts
@@ -148,7 +149,101 @@ function pumpehuset(html: string, url: string): Ev | null {
   return { url, name, start_date: local(Number(date[3]), MONTHS[date[2].toLowerCase()], Number(date[1]), start), venue: "Pumpehuset", city: "Copenhagen", country: "DK", price, currency: price ? "DKK" : null, description: desc ? `Concert. ${desc}` : "Concert" }
 }
 
+// ── United States (Actuent's main market) ──────────────────────────────────────────────────────
+
+// AEG Presents / Bowery Presents: every venue's listing is a public JSON feed (the same file the
+// venue's own site shows): /json/events/<n>/events.json per venue (Beacon Theatre, Webster Hall, the
+// Fonda, Climate Pledge Arena…) plus the shared Bowery Presents feeds (Terminal 5, Brooklyn Steel,
+// Music Hall of Williamsburg). Feed numbers are found by trying 1–400 each run (small files, a CDN).
+const AEG = "https://aegwebprod.blob.core.windows.net/json"
+const AEG_SHARED = [`${AEG}/resources/8/events/208lbnmkq5/events.json`, `${AEG}/resources/8/events/301mbke409/events.json`]
+async function aeg(): Promise<Ev[]> {
+  const urls = [...AEG_SHARED, ...Array.from({ length: 400 }, (_, i) => `${AEG}/events/${i + 1}/events.json`)]
+  const seen = new Set<string>(), out: Ev[] = []
+  let next = 0
+  await Promise.all(Array.from({ length: 8 }, async () => {
+    while (next < urls.length) {
+      const r = await fetch(urls[next++], { headers: HEADERS, signal: AbortSignal.timeout(15000) }).catch(() => null)
+      if (!r?.ok) continue
+      const d: any = await r.json().catch(() => null)
+      for (const e of d?.events || []) {
+        const utc = String(e?.eventDateTimeUTC || "")
+        const when = Date.parse(/[zZ]|[+-]\d\d:?\d\d$/.test(utc) ? utc : `${utc}Z`)
+        if (!e?.eventId || seen.has(e.eventId) || e.active === false || isNaN(when)) continue
+        seen.add(e.eventId)
+        const v = e.venue || {}, t = e.ticketing || {}
+        if (/cancel|postpone/i.test(String(t.status || ""))) continue
+        const price = Number(String(e.ticketPriceLow || "").replace(/[^0-9.]/g, "")) || null
+        const support = e.title?.supportingText ? ` with ${text(e.title.supportingText)}` : ""
+        out.push({
+          url: t.url || t.ticketURL || `https://www.axs.com/events/${e.eventId}`, name: text(e.title?.eventTitleText || e.title?.headlinersText || ""),
+          start_date: new Date(when).toISOString(), venue: text(v.title || ""), city: v.city || "",
+          country: v.countryCode || (v.country === "United States" ? "US" : v.country || ""), price, currency: price ? (e.currency || "USD") : null,
+          description: [`Concert${support}`, v.address_line ? `at ${text(v.title)}, ${v.address_line}` : "", e.age || ""].filter(Boolean).join(". ").slice(0, 400)
+        })
+      }
+    }
+  }))
+  return out
+}
+
+// TicketWeb's WordPress plugin (many US indie venues): "tw-section" blocks with name, date, time,
+// venue and address. Mercury East: Bowery Ballroom, Mercury Lounge.
+const MONTH_EN: Record<string, number> = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 }
+const US_ZONES: Record<string, string> = { "New York": "America/New_York", Brooklyn: "America/New_York" }
+function zoned(y: number, m: number, d: number, time: string, zone: string): string {
+  const [h, mi] = time.split(":").map(Number)
+  const guess = Date.UTC(y, m - 1, d, h || 0, mi || 0)
+  const parts = Object.fromEntries(new Intl.DateTimeFormat("en-GB", { timeZone: zone, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false }).formatToParts(new Date(guess)).map(p => [p.type, p.value]))
+  const shown = Date.UTC(Number(parts.year), Number(parts.month) - 1, Number(parts.day), Number(parts.hour) % 24, Number(parts.minute))
+  return new Date(guess - (shown - guess)).toISOString()
+}
+async function ticketWeb(pages: string[]): Promise<Ev[]> {
+  const out: Ev[] = [], seen = new Set<string>()
+  for (const page of pages) {
+    const r = await get(page)
+    if (!r) continue
+    const html = await r.text()
+    for (const block of html.split('class="tw-section"').slice(1)) {
+      const link = block.match(/class="tw-name">\s*<a href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/)
+      const date = text(block.match(/class="tw-event-date">([^<]+)</)?.[1] || "").match(/([A-Za-z]{3})[a-z]*\s+(\d{1,2}),\s*(\d{4})/)
+      if (!link || !date || !MONTH_EN[date[1].toLowerCase()] || /tw_cancelled|>\s*Cancelled\s*</i.test(block)) continue
+      const t = text(block.match(/class="tw-event-time">([^<]+)</)?.[1] || "").match(/(\d{1,2}):(\d{2})\s*(am|pm)/i)
+      const hour = t ? (Number(t[1]) % 12) + (/pm/i.test(t[3]) ? 12 : 0) : 20
+      const venue = text(block.match(/<span class="tw-venue-name">([\s\S]*?)<\/span>/)?.[1] || "")
+      const city = /brooklyn/i.test(block) ? "Brooklyn" : "New York"
+      const key = `${link[1]}|${date[0]}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      const price = Number(text(block.match(/class="tw-price">([\s\S]*?)<\/span>/)?.[1] || "").replace(/[^0-9.]/g, "")) || null
+      out.push({ url: link[1], name: text(link[2]), start_date: zoned(Number(date[3]), MONTH_EN[date[1].toLowerCase()], Number(date[2]), `${hour}:${t ? t[2] : "00"}`, US_ZONES[city]),
+        venue, city, country: "US", price, currency: price ? "USD" : null, description: "Concert" })
+    }
+    await pause(1000)
+  }
+  return out
+}
+
+// Venues that publish schema.org events: read with the generic reader, city set when missing.
+async function schemaEvents(pages: { url: string, city: string, country: string }[]): Promise<Ev[]> {
+  const out: Ev[] = []
+  for (const p of pages) {
+    const r = await get(p.url)
+    if (!r) continue
+    for (const e of extractEvents(await r.text(), p.url) as any[]) {
+      if (!e?.url || !e.start_date) continue
+      out.push({ ...e, name: text(e.name), city: e.city || p.city, country: e.country || p.country, venue: e.venue || new URL(p.url).hostname.replace(/^www\./, "") })
+    }
+    await pause(1000)
+  }
+  return out
+}
+
 export const READERS: Record<string, () => Promise<Ev[]>> = {
+  "aegpresents.com": aeg,
+  "mercuryeastpresents.com": () => ticketWeb(["https://mercuryeastpresents.com/boweryballroom", "https://mercuryeastpresents.com/mercurylounge", "https://mercuryeastpresents.com/"]),
+  "irvingplaza.com": () => schemaEvents([{ url: "https://www.irvingplaza.com", city: "New York", country: "US" }]),
+  "thebellhouseny.com": () => schemaEvents([{ url: "https://www.thebellhouseny.com/calendar", city: "Brooklyn", country: "US" }]),
   "vega.dk": vega,
   "royalarena.dk": royalArena,
   "drkoncerthuset.dk": drKoncerthuset,

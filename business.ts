@@ -221,6 +221,42 @@ export type SiteEvent = {
 
 const EVENT_TYPES = /(^|\s)(Event|\w+Event|Festival|CourseInstance)(\s|$)/
 
+// A start time without a time zone ("2026-10-01T19:00:00") is local time where the event is: the
+// venue's country and state (US), its longitude, or the site's country domain; never the crawler's own
+// clock (Date.parse alone read Irving Plaza's 7 pm as Copenhagen or UTC time).
+const ZONE_BY_COUNTRY: Record<string, string> = {
+  dk: "Europe/Copenhagen", se: "Europe/Stockholm", no: "Europe/Oslo", fi: "Europe/Helsinki", de: "Europe/Berlin", nl: "Europe/Amsterdam",
+  be: "Europe/Brussels", fr: "Europe/Paris", es: "Europe/Madrid", it: "Europe/Rome", pt: "Europe/Lisbon", at: "Europe/Vienna", ch: "Europe/Zurich",
+  pl: "Europe/Warsaw", cz: "Europe/Prague", ie: "Europe/Dublin", gb: "Europe/London", uk: "Europe/London", is: "Atlantic/Reykjavik",
+  au: "Australia/Sydney", nz: "Pacific/Auckland", jp: "Asia/Tokyo", in: "Asia/Kolkata", sg: "Asia/Singapore", br: "America/Sao_Paulo", mx: "America/Mexico_City"
+}
+const EVENT_COUNTRIES: Record<string, string> = { "united states": "us", usa: "us", "united kingdom": "gb", denmark: "dk", danmark: "dk", germany: "de", sweden: "se", norway: "no", canada: "ca", australia: "au", ireland: "ie", france: "fr", spain: "es", netherlands: "nl" }
+const PACIFIC = /^(CA|WA|OR|NV|California|Washington|Oregon|Nevada)$/i, MOUNTAIN = /^(CO|UT|NM|MT|WY|ID|Colorado|Utah|New Mexico|Montana|Wyoming|Idaho)$/i
+const CENTRAL = /^(IL|TX|TN|MO|MN|WI|LA|AL|MS|IA|KS|OK|AR|NE|ND|SD|Illinois|Texas|Tennessee|Missouri|Minnesota|Wisconsin|Louisiana|Alabama|Mississippi|Iowa|Kansas|Oklahoma|Arkansas|Nebraska)$/i
+function eventZone(country: string, region: string, lon: number, pageUrl: string): string {
+  let c = country.trim().toLowerCase()
+  c = EVENT_COUNTRIES[c] || c
+  if (!c) { try { const tld = new URL(pageUrl).hostname.split(".").pop() || ""; c = ZONE_BY_COUNTRY[tld] ? tld : "" } catch {} }
+  if (c === "us" || c === "ca") {
+    if (/^(AZ|Arizona)$/i.test(region)) return "America/Phoenix"
+    if (PACIFIC.test(region)) return "America/Los_Angeles"
+    if (MOUNTAIN.test(region)) return "America/Denver"
+    if (CENTRAL.test(region)) return "America/Chicago"
+    if (region || !Number.isFinite(lon)) return c === "ca" ? "America/Toronto" : "America/New_York"
+    return lon < -115 ? "America/Los_Angeles" : lon < -101 ? "America/Denver" : lon < -87 ? "America/Chicago" : "America/New_York"
+  }
+  return ZONE_BY_COUNTRY[c] || "UTC"
+}
+export function eventTime(value: unknown, zone: string): number {
+  const v = String(value || "").trim()
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(v) || /([zZ]|[+-]\d{2}:?\d{2})$/.test(v)) return Date.parse(v)
+  const [date, time] = v.split("T"), [y, mo, d] = date.split("-").map(Number), [h, mi] = time.split(":").map(Number)
+  const guess = Date.UTC(y, mo - 1, d, h, mi)
+  const parts = Object.fromEntries(new Intl.DateTimeFormat("en-GB", { timeZone: zone, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false }).formatToParts(new Date(guess)).map(p => [p.type, p.value]))
+  const shown = Date.UTC(Number(parts.year), Number(parts.month) - 1, Number(parts.day), Number(parts.hour) % 24, Number(parts.minute))
+  return guess - (shown - guess)
+}
+
 export function extractEvents(html: string, pageUrl: string, now = new Date()): SiteEvent[] {
   const nodes: any[] = []
   for (const m of html.matchAll(/<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)) {
@@ -232,11 +268,13 @@ export function extractEvents(html: string, pageUrl: string, now = new Date()): 
   const cutoff = now.getTime() - 86400000
   for (const n of nodes) {
     if (!EVENT_TYPES.test([].concat(n["@type"] || []).join(" ")) || typeof n.name !== "string") continue
-    const start = Date.parse(n.startDate)
-    if (!Number.isFinite(start) || start < cutoff || start > now.getTime() + 400 * 86400000) continue
-    const end = Date.parse(n.endDate)
     const loc = Array.isArray(n.location) ? n.location[0] : n.location
     const addr = typeof loc?.address === "object" ? loc.address : null
+    const where = typeof addr?.addressCountry === "object" ? addr.addressCountry?.name : addr?.addressCountry
+    const zone = eventZone(String(where || ""), String(addr?.addressRegion || ""), Number(loc?.geo?.longitude), pageUrl)
+    const start = eventTime(n.startDate, zone)
+    if (!Number.isFinite(start) || start < cutoff || start > now.getTime() + 400 * 86400000) continue
+    const end = eventTime(n.endDate, zone)
     const online = /Online/i.test(String(n.eventAttendanceMode || "")) || /VirtualLocation/.test(String(loc?.["@type"] || ""))
     const offer = Array.isArray(n.offers) ? n.offers[0] : n.offers
     let url = pageUrl
