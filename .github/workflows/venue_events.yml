@@ -3,6 +3,11 @@ on:
   schedule:
     - cron: '0 3 * * 1,4'
   workflow_dispatch:
+    inputs:
+      readers_only:
+        description: 'Only these venue readers (comma-separated domains, or "all"); empty = full run'
+        default: ''
+        required: false
 jobs:
   events:
     runs-on: ubuntu-latest
@@ -16,3 +21,4 @@ jobs:
       - run: npx tsx venue_events.ts
         env:
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          READERS_ONLY: ${{ github.event.inputs.readers_only }}

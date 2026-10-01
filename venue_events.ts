@@ -13,7 +13,10 @@ if (!process.env.SUPABASE_SERVICE_KEY) { console.error("Missing SUPABASE_SERVICE
 async function main() {
   // Big Copenhagen venues with their own readers (venue_readers.ts): light, so they run in launch week too.
   const { readVenues } = await import("./venue_readers")
-  console.log(`${await readVenues()} events from venue readers`)
+  // READERS_ONLY=livenation.com,aegpresents.com (or "all"): just those readers, no venue crawl after.
+  const only = process.env.READERS_ONLY
+  console.log(`${await readVenues(only && only !== "all" ? only.split(",") : undefined)} events from venue readers`)
+  if (only) return
   if (launchWeekPause()) return
   // Imported here so osm_businesses.ts doesn't start its own run.
   process.env.OSM_NO_MAIN = "1"

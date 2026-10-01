@@ -243,6 +243,13 @@ export const READERS: Record<string, () => Promise<Ev[]>> = {
   "aegpresents.com": aeg,
   "mercuryeastpresents.com": () => ticketWeb(["https://mercuryeastpresents.com/boweryballroom", "https://mercuryeastpresents.com/mercurylounge", "https://mercuryeastpresents.com/"]),
   "irvingplaza.com": () => schemaEvents([{ url: "https://www.irvingplaza.com", city: "New York", country: "US" }]),
+  // Live Nation's US venue sites publish their next ~25 shows as schema.org events.
+  "livenation.com": () => schemaEvents([
+    ["houseofblues.com/boston", "Boston"], ["houseofblues.com/chicago", "Chicago"], ["houseofblues.com/anaheim", "Anaheim"], ["houseofblues.com/lasvegas", "Las Vegas"],
+    ["houseofblues.com/dallas", "Dallas"], ["houseofblues.com/houston", "Houston"], ["houseofblues.com/neworleans", "New Orleans"], ["houseofblues.com/sandiego", "San Diego"],
+    ["houseofblues.com/orlando", "Orlando"], ["thefillmore.com", "San Francisco"], ["hollywoodpalladium.com", "Los Angeles"], ["fillmoresilverspring.com", "Silver Spring"],
+    ["fillmoreauditorium.org", "Denver"], ["fillmoreminneapolis.com", "Minneapolis"], ["thegramercytheatre.com", "New York"]
+  ].map(([path, city]) => ({ url: `https://www.${path}`, city, country: "US" }))),
   "thebellhouseny.com": () => schemaEvents([{ url: "https://www.thebellhouseny.com/calendar", city: "Brooklyn", country: "US" }]),
   "vega.dk": vega,
   "royalarena.dk": royalArena,
