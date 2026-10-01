@@ -13,11 +13,20 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      # Outside launch week (13–16 Oct 2026) stop here, before checkout and npm install use any minutes.
+      - id: when
+        run: |
+          d=$(date -u +%Y-%m-%d)
+          if [[ -n "${{ github.event.inputs.force }}" || ( "$d" > "2026-10-12" && "$d" < "2026-10-17" ) ]]; then echo "go=1" >> $GITHUB_OUTPUT; else echo "Not launch week ($d)"; fi
+      - if: steps.when.outputs.go == '1'
+        uses: actions/checkout@v4
+      - if: steps.when.outputs.go == '1'
+        uses: actions/setup-node@v4
         with:
           node-version: '24'
-      - run: npm install
-      - run: npx tsx warm_launch.ts
+      - if: steps.when.outputs.go == '1'
+        run: npm install
+      - if: steps.when.outputs.go == '1'
+        run: npx tsx warm_launch.ts
         env:
           FORCE: ${{ github.event.inputs.force }}
