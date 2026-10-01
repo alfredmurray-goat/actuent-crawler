@@ -11,6 +11,9 @@ const TYPES = ["theatre", "cinema", "arts centre", "music venue", "nightclub", "
 if (!process.env.SUPABASE_SERVICE_KEY) { console.error("Missing SUPABASE_SERVICE_KEY"); process.exit(1) }
 
 async function main() {
+  // Big Copenhagen venues with their own readers (venue_readers.ts): light, so they run in launch week too.
+  const { readVenues } = await import("./venue_readers")
+  console.log(`${await readVenues()} events from venue readers`)
   if (launchWeekPause()) return
   // Imported here so osm_businesses.ts doesn't start its own run.
   process.env.OSM_NO_MAIN = "1"
