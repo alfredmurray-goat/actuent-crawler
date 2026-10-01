@@ -1,0 +1,23 @@
+name: Warm Launch Questions
+on:
+  schedule:
+    - cron: '*/20 * * * *'
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Run outside launch week too (1 = yes)'
+        default: ''
+        required: false
+jobs:
+  warm:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm install
+      - run: npx tsx warm_launch.ts
+        env:
+          FORCE: ${{ github.event.inputs.force }}
