@@ -31,8 +31,10 @@ async function main() {
   }
   while (true) {
     let r: Response | null = null
-    for (let attempt = 0; attempt < 4; attempt++) {
-      r = await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?select=domain,popularity_rank&domain=gt.${encodeURIComponent(lastDomain)}&order=domain.asc&limit=1000`, { headers: HEADERS }).catch(() => null)
+    // A busy database times out on big pages: retry with smaller pages and longer pauses.
+    for (let attempt = 0; attempt < 7; attempt++) {
+      const size = [1000, 500, 250, 100, 100, 50, 50][attempt]
+      r = await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?select=domain,popularity_rank&domain=gt.${encodeURIComponent(lastDomain)}&order=domain.asc&limit=${size}`, { headers: HEADERS }).catch(() => null)
       if (r?.ok) break
       await new Promise(res => setTimeout(res, 5000 * (attempt + 1)))
     }
