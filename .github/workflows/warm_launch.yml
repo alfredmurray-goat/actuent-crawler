@@ -1,7 +1,8 @@
 name: Warm Launch Questions
 on:
   schedule:
-    - cron: '*/20 * * * *'
+    # Every 20 minutes on 13–16 October only (launch week); no runs the rest of the year.
+    - cron: '*/20 * 13-16 10 *'
   workflow_dispatch:
     inputs:
       force:
