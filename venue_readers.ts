@@ -35,7 +35,7 @@ function nextDate(d: number, m: number, time: string): string {
   return Date.parse(iso) < now.getTime() - 30 * 86400000 ? local(y + 1, m, d, time) : iso
 }
 const text = (v: string) => String(v || "").replace(/<[^>]+>/g, " ").replace(/&#(\d+);/g, (_, c) => String.fromCodePoint(Number(c)))
-  .replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/&nbsp;/g, " ").replace(/&ndash;/g, "–").replace(/\s+/g, " ").trim()
+  .replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/&nbsp;/g, " ").replace(/&(aelig|AElig|oslash|Oslash|aring|Aring|eacute|Eacute|auml|Auml|ouml|Ouml|uuml|Uuml|ndash|mdash|hellip|rsquo|lsquo|rdquo|ldquo);/g, (_, n) => ({ aelig: "æ", AElig: "Æ", oslash: "ø", Oslash: "Ø", aring: "å", Aring: "Å", eacute: "é", Eacute: "É", auml: "ä", Auml: "Ä", ouml: "ö", Ouml: "Ö", uuml: "ü", Uuml: "Ü", ndash: "–", mdash: "—", hellip: "…", rsquo: "’", lsquo: "‘", rdquo: "”", ldquo: "“" } as Record<string, string>)[n]).replace(/\s+/g, " ").trim()
 const upcoming = (e: Ev) => Date.parse(e.start_date) > Date.now() - 6 * 3600000
 
 // VEGA: Payload CMS API (all upcoming concerts in Store VEGA, Lille VEGA and Ideal Bar).
