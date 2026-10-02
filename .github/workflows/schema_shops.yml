@@ -1,0 +1,20 @@
+name: Big Shop Products
+# Nightly: products from big shops that aren't on Shopify/WooCommerce (schema_shops.ts: Zappos first),
+# read from their product pages' schema.org data for the brands people search most.
+on:
+  schedule:
+    - cron: '30 2 * * *'
+  workflow_dispatch:
+jobs:
+  products:
+    runs-on: ubuntu-latest
+    timeout-minutes: 100
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm install
+      - run: npx tsx schema_shops.ts
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
