@@ -19,20 +19,23 @@ export type Item = {
   // Shopify variant id: lets agents hand over a ready cart (https://shop/cart/<variant>:<qty>).
   variant_id?: string | null
   // Sizes and colours that are in stock, e.g. { size: ["42", "43"], colour: ["Black"] } (list_nineteen.sql).
-  options?: { size?: string[], colour?: string[] } | null
+  options?: { size?: string[], colour?: string[], size_variants?: Record<string, string> } | null
 }
 
 const SIZE_NAME = /^(size|sizes|størrelse|str|größe|grösse|taille|talla|storlek|koko|maat|taglia|shoe size|eu size)$/i
 const COLOUR_NAME = /^(colou?rs?|farve|farbe|couleur|färg|väri|kleur|colore)$/i
 // In-stock sizes and colours from a Shopify product's options and variants.
 export function shopifyOptions(p: any): Item["options"] {
-  const out: { size?: string[], colour?: string[] } = {}
+  const out: { size?: string[], colour?: string[], size_variants?: Record<string, string> } = {}
   for (const o of p.options || []) {
     const key = SIZE_NAME.test(String(o.name || "").trim()) ? "size" : COLOUR_NAME.test(String(o.name || "").trim()) ? "colour" : null
     if (!key) continue
     const field = `option${o.position || 1}`
-    const inStock = new Set((p.variants || []).filter((v: any) => v.available !== false).map((v: any) => String(v[field] ?? "").trim()).filter(Boolean))
+    const available = (p.variants || []).filter((v: any) => v.available !== false)
+    const inStock = new Set(available.map((v: any) => String(v[field] ?? "").trim()).filter(Boolean))
     if (inStock.size) out[key] = [...inStock].slice(0, 40) as string[]
+    // Each in-stock size's variant, so a link or cart can be for exactly that size.
+    if (key === "size") for (const v of available) { const s = String(v[field] ?? "").trim(); if (s && v.id != null && !(s in (out.size_variants ||= {}))) out.size_variants![s] = String(v.id) }
   }
   return out.size || out.colour ? out : null
 }
