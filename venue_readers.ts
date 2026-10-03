@@ -315,7 +315,45 @@ async function libcal(): Promise<Ev[]> {
   return out
 }
 
+// The Events Calendar (WordPress plugin): the same public JSON API on every site that uses it
+// (/wp-json/tribe/events/v1/events). Parks, gardens, museums and neighbourhood groups: much of it
+// daytime (walks, tours, workshops, festivals). `delay` honours a site's robots.txt Crawl-delay.
+const TRIBE: { site: string, city: string, delay?: number }[] = [
+  { site: "www.statenislandmuseum.org", city: "Staten Island" },
+  { site: "riversideparknyc.org", city: "New York", delay: 10000 },
+  { site: "www.randallsisland.org", city: "New York" },
+  { site: "flatironnomad.nyc", city: "New York" },
+  { site: "www.mocanyc.org", city: "New York" },
+  { site: "www.littleisland.org", city: "New York" },
+  { site: "www.weeksvillesociety.org", city: "Brooklyn" }
+]
+const entities = (v: string) => text(v).replace(/&#038;|&amp;/g, "&").replace(/&#8211;|&ndash;/g, "–").replace(/&#8217;|&#8216;/g, "’").replace(/&#8220;|&#8221;/g, "\"").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim()
+async function tribe(): Promise<Ev[]> {
+  const out: Ev[] = []
+  for (const t of TRIBE) {
+    for (let page = 1; page <= 6; page++) {
+      const r = await get(`https://${t.site}/wp-json/tribe/events/v1/events?per_page=50&page=${page}&start_date=now`, { "Accept": "application/json" })
+      const d: any = r ? await r.json().catch(() => null) : null
+      for (const e of d?.events || []) {
+        const utc = Date.parse(`${String(e.utc_start_date || "").replace(" ", "T")}Z`)
+        if (!e.url || !e.title || isNaN(utc) || /cancel+ed/i.test(e.title)) continue
+        const v = Array.isArray(e.venue) ? null : e.venue
+        const price = String(e.cost || "").match(/\d+(\.\d+)?/)
+        out.push({ url: e.url, name: entities(e.title), start_date: new Date(utc).toISOString(),
+          venue: entities(v?.venue || t.site.replace(/^www\./, "")), city: v?.city || t.city, country: "US",
+          price: /free/i.test(String(e.cost || "")) ? 0 : price ? Number(price[0]) : null, currency: price || /free/i.test(String(e.cost || "")) ? "USD" : null,
+          description: entities(e.excerpt || e.description || "").slice(0, 400) })
+      }
+      if (!d?.next_rest_url) break
+      await pause(t.delay || 1000)
+    }
+    await pause(t.delay || 1000)
+  }
+  return out
+}
+
 export const READERS: Record<string, () => Promise<Ev[]>> = {
+  "tribe-events": tribe,
   "libcal.com": libcal,
   "lapl.org": lapl,
   "aegpresents.com": aeg,
