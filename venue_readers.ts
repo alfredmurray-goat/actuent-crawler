@@ -375,7 +375,30 @@ async function bbg(): Promise<Ev[]> {
   return out.filter(e => Date.parse(e.start_date) > Date.now() - 6 * 3600000)
 }
 
+// Flea and craft markets (loppemarkeder, kræmmermarkeder) from loppemarkeder.nu: schema.org events on
+// its front page and its Copenhagen pages. The city comes from the postcode in the address (under 2800 is
+// Copenhagen and Frederiksberg) or the town after it, so "markets in cph today" finds Brønshøj Torv.
+const CPH_AREAS = /\b(københavn|kobenhavn|copenhagen|kbh|brønshøj|vanløse|valby|nørrebro|vesterbro|østerbro|amager|islands brygge|nordhavn|sydhavn|christianshavn|frederiksberg|indre by|bispebjerg|husum|nordvest|ørestad|refshaleøen|kødbyen|sundby|kastrup|hvidovre|rødovre|tårnby)\b/i
+async function loppemarkeder(): Promise<Ev[]> {
+  const out: Ev[] = [], seen = new Set<string>()
+  for (const page of ["/", "/loppemarkeder-koebenhavn/", "/loppemarkeder-koebenhavns-omegn/", "/loppemarked-vesterbro/"]) {
+    const r = await get(`https://www.loppemarkeder.nu${page}`)
+    if (r) for (const e of extractEvents(await r.text(), `https://www.loppemarkeder.nu${page}`) as any[]) {
+      if (!e?.url || seen.has(`${e.url}|${e.start_date}`)) continue
+      seen.add(`${e.url}|${e.start_date}`)
+      const where = String(e.venue || ""), pc = where.match(/\b(\d{4})\s+([A-ZÆØÅ][\wæøåÆØÅ .-]+?)(?:,|$)/)
+      const all = `${text(e.name)} ${where} ${text(e.description || "")}`
+      const city = pc ? (Number(pc[1]) < 2800 ? "Copenhagen" : pc[2].trim()) : CPH_AREAS.test(all) ? "Copenhagen" : (text(e.name).split(/\s+[–-]\s+/)[1] || "Denmark")
+      out.push({ url: e.url, name: text(e.name), start_date: e.start_date, venue: where || text(e.name), city, country: "DK",
+        price: e.price ?? null, currency: e.currency ?? null, description: ["Flea / craft market", e.description ? text(e.description) : ""].filter(Boolean).join(". ").slice(0, 400) })
+    }
+    await pause(1000)
+  }
+  return out
+}
+
 export const READERS: Record<string, () => Promise<Ev[]>> = {
+  "loppemarkeder.nu": loppemarkeder,
   "bbg.org": bbg,
   "tribe-events": tribe,
   "libcal.com": libcal,
