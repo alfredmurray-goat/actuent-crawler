@@ -281,9 +281,9 @@ async function lapl(): Promise<Ev[]> {
 
 // LibCal (Springshare): the calendar system many public libraries use. Its calendar page reads a
 // public JSON list (/ajax/calendar/list), the same for every library, so one reader covers them all.
-// Mostly daytime and free: storytimes, workshops, tech help, exhibitions, walks.
+// Mostly daytime and free: storytimes, workshops, tech help, exhibitions, walks. (Denver's LibCal
+// disallows all bots in robots.txt, so it isn't listed.)
 const LIBCAL: { sub: string, name: string, city: string, zone: string }[] = [
-  { sub: "denverlibrary", name: "Denver Public Library", city: "Denver", zone: "America/Denver" },
   { sub: "houstonlibrary", name: "Houston Public Library", city: "Houston", zone: "America/Chicago" },
   { sub: "cpl", name: "Cleveland Public Library", city: "Cleveland", zone: "America/New_York" },
   { sub: "fairfaxcounty", name: "Fairfax County Public Library", city: "Fairfax", zone: "America/New_York" },
