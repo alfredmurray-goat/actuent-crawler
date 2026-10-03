@@ -239,7 +239,48 @@ async function schemaEvents(pages: { url: string, city: string, country: string 
   return out
 }
 
+// Los Angeles Public Library: daytime events (storytimes, workshops, nature walks, exhibitions) from
+// the main events page and each of its ~73 branch pages (one page a second). Exhibitions that already
+// started show from today at 10:00.
+async function lapl(): Promise<Ev[]> {
+  const base = "https://www.lapl.org"
+  const list = await get(`${base}/branches`)
+  const branches = list ? [...new Set([...(await list.text()).matchAll(/href="(\/branches\/[a-z0-9-]+)"/g)].map(m => m[1]))] : []
+  const out: Ev[] = [], seen = new Set<string>()
+  const today = new Date(), todayKey = Number(new Intl.DateTimeFormat("en-CA", { timeZone: "America/Los_Angeles", year: "numeric", month: "2-digit", day: "2-digit" }).format(today).replace(/-/g, ""))
+  for (const page of ["/events", ...branches]) {
+    const r = await get(`${base}${page}`)
+    if (r) for (const card of (await r.text()).split('class="c-teaser-card__heading"').slice(1)) {
+      const link = card.match(/<a href="([^"]+)"[\s\S]*?<span class="e-link__text">([\s\S]*?)<\/span>/)
+      const date = card.match(/meta-item--date">\s*<span[^>]*>date:<\/span>\s*([^<]+)/)?.[1].trim() || ""
+      if (!link || !link[1].startsWith("/events/") || !date) continue
+      const url = `${base}${link[1]}`
+      if (seen.has(url)) continue
+      seen.add(url)
+      const [from, until] = date.split(/\s*-\s*/).map(d => d.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/)).map(m => m ? [Number(m[3]), Number(m[1]), Number(m[2])] : null)
+      if (!from) continue
+      let [y, m, d] = from
+      const key = (x: number[]) => x[0] * 10000 + x[1] * 100 + x[2]
+      const time = card.match(/meta-item--time">\s*<span[^>]*>time:<\/span>\s*([^<]+)/)?.[1].trim() || ""
+      const t = time.match(/(\d{1,2})(?::(\d{2}))?\s*(AM|PM)/i)
+      let hm = t ? `${(Number(t[1]) % 12) + (/pm/i.test(t[3]) ? 12 : 0)}:${t[2] || "00"}` : "10:00"
+      if (key(from) < todayKey) {
+        if (!until || key(until) < todayKey) continue
+        const [ty, tm, td] = [Math.floor(todayKey / 10000), Math.floor(todayKey / 100) % 100, todayKey % 100];[y, m, d] = [ty, tm, td]; hm = "10:00"
+      }
+      const branch = text(card.match(/meta-item--location">[\s\S]*?<a[^>]*>([\s\S]*?)<\/a>/)?.[1] || "").trim()
+      const about = text(card.match(/c-teaser-card__text">([\s\S]*?)<\/div>/)?.[1] || "").replace(/\s+/g, " ").trim()
+      out.push({ url, name: text(link[2]).replace(/\s+/g, " ").trim(), start_date: zoned(y, m, d, hm, "America/Los_Angeles"),
+        venue: branch ? `${/library/i.test(branch) ? branch : `${branch} Library`} (LAPL)` : "Los Angeles Public Library", city: "Los Angeles", country: "US", price: 0, currency: "USD",
+        description: [`Free library event${time && !/all day/i.test(time) ? `, ${time}` : ""}`, about].filter(Boolean).join(". ").slice(0, 400) })
+    }
+    await pause(1000)
+  }
+  return out
+}
+
 export const READERS: Record<string, () => Promise<Ev[]>> = {
+  "lapl.org": lapl,
   "aegpresents.com": aeg,
   "mercuryeastpresents.com": () => ticketWeb(["https://mercuryeastpresents.com/boweryballroom", "https://mercuryeastpresents.com/mercurylounge", "https://mercuryeastpresents.com/"]),
   "irvingplaza.com": () => schemaEvents([{ url: "https://www.irvingplaza.com", city: "New York", country: "US" }]),
