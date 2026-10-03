@@ -352,7 +352,31 @@ async function tribe(): Promise<Ev[]> {
   return out
 }
 
+// Brooklyn Botanic Garden: classes, tours and garden events ("Saturday, October 3, 2026 | 10 a.m.–1:30 p.m.").
+async function bbg(): Promise<Ev[]> {
+  const r = await get("https://www.bbg.org/calendar")
+  if (!r) return []
+  const out: Ev[] = [], seen = new Set<string>()
+  for (const item of (await r.text()).split(/<li\s+data-category/).slice(1)) {
+    const href = item.match(/<a\s+href="(\/[^"]+)"/)?.[1], title = item.match(/<h3[^>]*>([\s\S]*?)<\/h3>/)?.[1]
+    const when = text(item.match(/class="event-date"\s*>([\s\S]*?)<\/p>/)?.[1] || "").replace(/\s+/g, " ").trim()
+    const d = when.match(/([A-Z][a-z]+) (\d{1,2}), (\d{4})/)
+    if (!href || !title || !d || !MONTH_EN[d[1].slice(0, 3).toLowerCase()]) continue
+    const t = when.match(/\|\s*(\d{1,2})(?::(\d{2}))?\s*(a\.m\.|p\.m\.|noon)/i)
+    const hour = t ? (/noon/i.test(t[3]) ? 12 : (Number(t[1]) % 12) + (/p\.m\./i.test(t[3]) ? 12 : 0)) : 10
+    const url = `https://www.bbg.org${href}`, key = `${url}|${d[0]}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    const tag = text(item.match(/class="event-tag">([\s\S]*?)<\/span>/)?.[1] || "").trim()
+    const blurb = text(item.match(/class="event-blurb">([\s\S]*?)<span class="learnmore"/)?.[1] || "").replace(/\s+/g, " ").trim()
+    out.push({ url, name: text(title).replace(/\s+/g, " ").trim(), start_date: zoned(Number(d[3]), MONTH_EN[d[1].slice(0, 3).toLowerCase()], Number(d[2]), `${hour}:${t?.[2] || "00"}`, "America/New_York"),
+      venue: "Brooklyn Botanic Garden", city: "Brooklyn", country: "US", description: [tag, when.split("|").slice(1).join("·").trim(), blurb].filter(Boolean).join(". ").slice(0, 400) })
+  }
+  return out.filter(e => Date.parse(e.start_date) > Date.now() - 6 * 3600000)
+}
+
 export const READERS: Record<string, () => Promise<Ev[]>> = {
+  "bbg.org": bbg,
   "tribe-events": tribe,
   "libcal.com": libcal,
   "lapl.org": lapl,
