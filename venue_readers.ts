@@ -279,7 +279,44 @@ async function lapl(): Promise<Ev[]> {
   return out
 }
 
+// LibCal (Springshare): the calendar system many public libraries use. Its calendar page reads a
+// public JSON list (/ajax/calendar/list), the same for every library, so one reader covers them all.
+// Mostly daytime and free: storytimes, workshops, tech help, exhibitions, walks.
+const LIBCAL: { sub: string, name: string, city: string, zone: string }[] = [
+  { sub: "denverlibrary", name: "Denver Public Library", city: "Denver", zone: "America/Denver" },
+  { sub: "houstonlibrary", name: "Houston Public Library", city: "Houston", zone: "America/Chicago" },
+  { sub: "cpl", name: "Cleveland Public Library", city: "Cleveland", zone: "America/New_York" },
+  { sub: "fairfaxcounty", name: "Fairfax County Public Library", city: "Fairfax", zone: "America/New_York" },
+  { sub: "ocpl", name: "Orange County Public Libraries", city: "Orange County", zone: "America/Los_Angeles" },
+  { sub: "richmondpubliclibrary", name: "Richmond Public Library", city: "Richmond", zone: "America/New_York" }
+]
+async function libcal(): Promise<Ev[]> {
+  const out: Ev[] = []
+  for (const lib of LIBCAL) {
+    for (let page = 1; page <= 12; page++) {
+      const r = await get(`https://${lib.sub}.libcal.com/ajax/calendar/list?c=-1&date=0000-00-00&perpage=48&page=${page}`, { "X-Requested-With": "XMLHttpRequest", "Accept": "application/json" })
+      const d: any = r ? await r.json().catch(() => null) : null
+      const rows: any[] = d?.results || []
+      for (const e of rows) {
+        const m = String(e.startdt || "").match(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})/)
+        if (!m || !e.url || !e.title || /^cancel+ed\b/i.test(e.title) || e.online_event === true) continue
+        const place = e.campus || (e.location && !/room|floor|study|virtual/i.test(e.location) ? e.location : "")
+        const cost = String(e.registration_cost || "").match(/\d+(\.\d+)?/)
+        const what = [e.categories, (e.audiences || []).map((a: any) => a.name).join(", ")].filter(Boolean).join(" · ")
+        out.push({ url: e.url, name: text(e.title).trim(), start_date: zoned(Number(m[1]), Number(m[2]), Number(m[3]), e.all_day ? "10:00" : `${m[4]}:${m[5]}`, lib.zone),
+          venue: place ? `${text(place)} (${lib.name})` : lib.name, city: lib.city, country: "US", price: cost ? Number(cost[0]) : 0, currency: "USD",
+          description: [`Library event${e.all_day ? ", all day" : `, ${e.start}${e.end ? `–${e.end}` : ""}`}`, what, text(e.shortdesc || "").replace(/\s+/g, " ").trim()].filter(Boolean).join(". ").slice(0, 400) })
+      }
+      if (rows.length < 48) break
+      await pause(1000)
+    }
+    await pause(1000)
+  }
+  return out
+}
+
 export const READERS: Record<string, () => Promise<Ev[]>> = {
+  "libcal.com": libcal,
   "lapl.org": lapl,
   "aegpresents.com": aeg,
   "mercuryeastpresents.com": () => ticketWeb(["https://mercuryeastpresents.com/boweryballroom", "https://mercuryeastpresents.com/mercurylounge", "https://mercuryeastpresents.com/"]),
