@@ -70,7 +70,11 @@ async function itemFrom(shop: Shop, url: string): Promise<Item | null> {
 async function main() {
   const started = Date.now()
   if (!process.env.DRY_RUN && await tooFullToGrow(0.85)) { console.log("Database nearly full: no new products this run."); return }
-  for (const shop of SHOPS.filter(s => !process.env.SHOP || s.domain === process.env.SHOP)) {
+  const shops = SHOPS.filter(s => !process.env.SHOP || s.domain === process.env.SHOP)
+  // Each shop gets its share of the time, so the first shop can't use up the whole run.
+  const perShopMs = TIME_BUDGET_MS / shops.length
+  for (const shop of shops) {
+    const shopStarted = Date.now()
     const index = await getText(shop.sitemapIndex)
     if (!index) { console.log(`${shop.domain}: no sitemap (or robots.txt says no)`); continue }
     // Paths start with the brand, after "mens-"/"womens-" on some shops ("/product/46149/mens-adidas-…").
@@ -91,7 +95,7 @@ async function main() {
     const batch: Item[] = []
     let saved = 0
     for (const url of picked) {
-      if (Date.now() - started > TIME_BUDGET_MS || (!process.env.DRY_RUN && await searchNeedsTheDatabase())) break
+      if (Date.now() - started > TIME_BUDGET_MS || Date.now() - shopStarted > perShopMs || (!process.env.DRY_RUN && await searchNeedsTheDatabase())) break
       const item = await itemFrom(shop, url).catch(() => null)
       if (process.env.DRY_RUN) { console.log(item ? `${item.name} | ${item.price} ${item.currency} | ${item.available ? "in stock" : "?"} | ${item.gtin}` : `- ${url}`); if (++saved >= 5) break; continue }
       if (item) batch.push(item)
