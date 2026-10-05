@@ -1,0 +1,27 @@
+name: Live Assistant Test
+# Weekly (Monday morning) and in launch week every day: an AI assistant answers 20 launch questions
+# with Actuent's MCP tools (live_test.ts). Fails below 80%, so GitHub emails the failure.
+on:
+  schedule:
+    - cron: '0 6 * * 1'
+    - cron: '0 6 11-17 10 *'
+  workflow_dispatch:
+    inputs:
+      only:
+        description: 'Only these question numbers (comma-separated); empty = all'
+        default: ''
+        required: false
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm install
+      - run: npx tsx live_test.ts
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          ONLY: ${{ github.event.inputs.only }}
