@@ -80,7 +80,7 @@ async function main() {
   const list = await mcp("tools/list")
   const tools = (list?.tools || []).map((t: any) => ({ type: "function", function: { name: t.name, description: String(t.description || "").slice(0, 1000), parameters: t.inputSchema || { type: "object", properties: {} } } }))
   if (!tools.length) { console.error("Couldn't list Actuent's tools"); process.exit(1) }
-  const only = process.env.ONLY?.split(",").map(Number)
+  const only = process.env.ONLY?.trim() ? process.env.ONLY.split(",").map(Number) : null
   const rows: string[] = []
   let passed = 0, total = 0
   for (const [i, [question, tool, must]] of Q.entries()) {
