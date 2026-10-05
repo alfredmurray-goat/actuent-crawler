@@ -272,6 +272,17 @@ export async function venueEvents(domain: string): Promise<number> {
       if (fromFeed.length) { await saveEvents(domain, fromFeed); saved += fromFeed.length; console.log(`  ${fromFeed.length} events from ${domain}'s calendar feed`) }
       break
     }
+    // Squarespace calendars and WordPress's The Events Calendar: their own JSON feeds list everything.
+    if (!events.length && !saved && /static1\.squarespace\.com|Static\.SQUARESPACE_CONTEXT/i.test(html)) {
+      const { squarespacePage } = await import("./venue_readers")
+      const fromFeed = (await squarespacePage({ url: r.url.split("?")[0], venue: domain }).catch(() => [])).filter(e => Date.parse(e.start_date) > Date.now())
+      if (fromFeed.length) { await saveEvents(domain, fromFeed.slice(0, 200)); saved += fromFeed.length; console.log(`  ${fromFeed.length} events from ${domain}'s Squarespace calendar`) }
+    }
+    if (!events.length && !saved && /tribe-events|\/wp-json\/tribe\//i.test(html)) {
+      const { tribeSite } = await import("./venue_readers")
+      const fromFeed = await tribeSite({ site: domain }).catch(() => [])
+      if (fromFeed.length) { await saveEvents(domain, fromFeed.slice(0, 300)); saved += fromFeed.length; console.log(`  ${fromFeed.length} events from ${domain}'s events calendar`) }
+    }
     if (saved >= 60) break
   }
   return saved

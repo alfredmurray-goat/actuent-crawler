@@ -285,7 +285,15 @@ async function dplLibraries(): Promise<Ev[]> {
 // for "comedy" finds a comedian's name at a comedy club.
 async function squarespace(pages: { url: string, venue: string, city: string, country: string, about: string }[]): Promise<Ev[]> {
   const out: Ev[] = []
-  for (const p of pages) {
+  for (const p of pages) { out.push(...await squarespacePage(p)); await pause(1000) }
+  return out
+}
+
+// One Squarespace events page. City and country fall back to each event's own address
+// ("Chicago, IL, 60614"), for venues found by the venue crawl.
+export async function squarespacePage(p: { url: string, venue: string, city?: string, country?: string, about?: string }): Promise<Ev[]> {
+  const out: Ev[] = []
+  {
     // Calendar views list a month in `items` (with a next page), list views use `upcoming`.
     const list: any[] = [], seen = new Set<string>()
     let next: string | null = `${p.url}?format=json`
@@ -304,10 +312,10 @@ async function squarespace(pages: { url: string, venue: string, city: string, co
       out.push({
         url: new URL(e.fullUrl, p.url).href, name: text(e.title).replace(/^SOLD OUT\s*[|:-]\s*/i, "SOLD OUT: "),
         start_date: new Date(Number(e.startDate)).toISOString(), venue: e.location?.addressTitle || p.venue,
-        city: p.city, country: p.country, description: [p.about, excerpt].filter(Boolean).join(" ")
+        city: p.city || String(e.location?.addressLine2 || "").split(",")[0].trim(), country: p.country || (/united states|^us/i.test(String(e.location?.addressCountry || "")) ? "US" : String(e.location?.addressCountry || "")),
+        description: [p.about, excerpt].filter(Boolean).join(" ")
       })
     }
-    await pause(1000)
   }
   return out
 }
@@ -404,6 +412,16 @@ const entities = (v: string) => text(v).replace(/&#038;|&amp;/g, "&").replace(/&
 async function tribe(): Promise<Ev[]> {
   const out: Ev[] = []
   for (const t of TRIBE) {
+    out.push(...await tribeSite(t))
+    await pause(t.delay || 1000)
+  }
+  return out
+}
+
+// One site's The Events Calendar feed (also used by the venue crawl when it spots the plugin).
+export async function tribeSite(t: { site: string, city?: string, country?: string, delay?: number }): Promise<Ev[]> {
+  const out: Ev[] = []
+  {
     for (let page = 1; page <= 6; page++) {
       const r = await get(`https://${t.site}/wp-json/tribe/events/v1/events?per_page=50&page=${page}&start_date=now`, { "Accept": "application/json" })
       const d: any = r ? await r.json().catch(() => null) : null
@@ -413,14 +431,13 @@ async function tribe(): Promise<Ev[]> {
         const v = Array.isArray(e.venue) ? null : e.venue
         const price = String(e.cost || "").match(/\d+(\.\d+)?/)
         out.push({ url: e.url, name: entities(e.title), start_date: new Date(utc).toISOString(),
-          venue: entities(v?.venue || t.site.replace(/^www\./, "")), city: v?.city || t.city, country: "US",
+          venue: entities(v?.venue || t.site.replace(/^www\./, "")), city: v?.city || t.city || "", country: t.country || (v?.country && /united states|^us$|^usa$/i.test(v.country) ? "US" : v?.country) || "US",
           price: /free/i.test(String(e.cost || "")) ? 0 : price ? Number(price[0]) : null, currency: price || /free/i.test(String(e.cost || "")) ? "USD" : null,
           description: entities(e.excerpt || e.description || "").slice(0, 400) })
       }
       if (!d?.next_rest_url) break
       await pause(t.delay || 1000)
     }
-    await pause(t.delay || 1000)
   }
   return out
 }
