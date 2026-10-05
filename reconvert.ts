@@ -1,5 +1,5 @@
 import { SUPABASE_URL, SUPABASE_HEADERS, fetchNative, fetchSite, saveSite, saveEvents, contentHash, robotsAllows } from "./shared"
-import { searchNeedsTheDatabase } from "./quiet"
+import { searchNeedsTheDatabase, tooFullToGrow } from "./quiet"
 import { INFRASTRUCTURE } from "./heuristic"
 import { extractEvents } from "./business"
 import { fetchLlmsTxt } from "./llmstxt"
@@ -65,6 +65,8 @@ async function touch(domain: string, extra: object = {}): Promise<void> {
 }
 
 async function main() {
+  // Upgraded sites take more room than minimal ones: no upgrades once the free database is 85% full.
+  if (await tooFullToGrow(0.85)) return
   const start = Date.now()
   const tally = { llm: 0, heuristic: 0, native: 0, unchanged: 0, skipped: 0, unreachable: 0, error: 0 }
   let processed = 0, llmMisses = 0

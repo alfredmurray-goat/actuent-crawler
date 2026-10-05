@@ -3,6 +3,7 @@ import { extractEvents } from "./business"
 import { fetchLlmsTxt } from "./llmstxt"
 import { convertSite, domainGone } from "./convert"
 import { isPublicHost } from "./safe-fetch"
+import { tooFullToGrow } from "./quiet"
 
 // Every 30 minutes: sites people searched for while Actuent was too busy to visit them live
 // (crawl_queue, list_ten.sql, filled by live search). Each is added or refreshed with the same
@@ -46,6 +47,8 @@ async function handle(domain: string): Promise<string> {
 }
 
 async function main() {
+  // Sites people asked for keep coming in until the database is 92% full (it goes read-only at 100%).
+  if (await tooFullToGrow(0.92)) return
   const r = await fetch(`${SUPABASE_URL}/rest/v1/crawl_queue?select=domain&done_at=is.null&order=requested_at.asc&limit=${MAX}`, { headers: SUPABASE_HEADERS })
   if (!r.ok) { console.log(`crawl_queue not available (run list_ten.sql): ${r.status}`); return }
   const todo: string[] = (await r.json()).map((x: any) => x.domain)
