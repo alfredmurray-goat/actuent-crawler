@@ -11,7 +11,8 @@ const MODELS = (process.env.LIVE_TEST_MODELS || "openai/gpt-oss-120b,openai/gpt-
 const today = new Date().toISOString().slice(0, 10)
 const SYSTEM = `You are an AI assistant chatting with a user. Today is ${today}. You have Actuent's tools for live information: use them for anything current, local, priced or event-related. Answer helpfully and concisely, naming the places, events or products you found.`
 
-// [question, tool it should use (or null: any/none), what the answer must mention (regex) or null]
+// [question, tool it should use (null: any Actuent tool; "none": general knowledge, no tool needed),
+//  what the answer must mention (regex) or null]
 const Q: [string, string | null, RegExp | null][] = [
   ["what's on in copenhagen tonight?", "actuent_events", null],
   ["any concerts in new york this weekend?", "actuent_events", null],
@@ -28,9 +29,9 @@ const Q: [string, string | null, RegExp | null][] = [
   ["does notion have a free plan?", null, /free/i],
   ["does spotify have a student discount", null, /student/i],
   ["compare notion vs obsidian", null, /obsidian/i],
-  ["where is new balance from?", null, /boston/i],
+  ["where is new balance from?", "none", /boston/i],
   ["latest news about openai", "actuent_news", null],
-  ["what is actuent?", null, /internet|live|search/i],
+  ["what is actuent?", "none", /internet|live|search/i],
   ["best password manager", null, /1password|bitwarden|dashlane|proton|keeper/i],
   ["plan a saturday afternoon in copenhagen: lunch, a museum and drinks", null, /lunch/i]
 ]
@@ -48,7 +49,7 @@ async function chat(model: string, messages: any[], tools: any[], opts: { tries?
     body: JSON.stringify({ model, messages, tools, tool_choice: "auto", temperature: 0.2, max_tokens: 1200 }), signal: AbortSignal.timeout(90000)
   })
   // Free Groq: ~8,000 tokens a minute per model. On a rate limit, wait as long as it says and try again.
-  if (r.status === 429 && (opts.tries || 0) < 4) {
+  if (r.status === 429 && (opts.tries || 0) < 7) {
     const wait = Math.min(60, Number(r.headers.get("retry-after")) || 20)
     await new Promise(res => setTimeout(res, wait * 1000))
     return chat(model, messages, tools, { tries: (opts.tries || 0) + 1 })
@@ -61,7 +62,7 @@ async function ask(question: string, tools: any[]): Promise<{ used: string[], an
   const messages: any[] = [{ role: "system", content: SYSTEM }, { role: "user", content: question }]
   const used: string[] = []
   let results = ""
-  for (let turn = 0; turn < 5; turn++) {
+  for (let turn = 0; turn < 8; turn++) {
     let msg: any = null
     for (const model of MODELS) { try { msg = await chat(model, messages, tools); break } catch (e) { console.log(String(e)) } }
     if (!msg) return { used, answer: "(no model answered)", results }
@@ -78,7 +79,7 @@ async function ask(question: string, tools: any[]): Promise<{ used: string[], an
       await new Promise(r => setTimeout(r, 4000)) // stays under the free limit of 20 tool calls a minute
     }
   }
-  return { used, answer: "(still calling tools after 5 turns)", results }
+  return { used, answer: "(still calling tools after 8 turns)", results }
 }
 
 async function main() {
@@ -95,8 +96,9 @@ async function main() {
     const started = Date.now()
     const { used, answer, results } = await ask(question, tools).catch(e => ({ used: [] as string[], answer: `(error: ${e})`, results: "" }))
     const problems: string[] = []
-    if (!used.length) problems.push("used no Actuent tool")
-    if (tool && !used.includes(tool)) problems.push(`expected ${tool}`)
+    if (!used.length && tool !== "none") problems.push("used no Actuent tool")
+    if (tool && tool !== "none" && !used.includes(tool)) problems.push(`expected ${tool}`)
+    if (/^\((no model answered|still calling tools)/.test(answer)) problems.push("test couldn't finish (model limits)")
     if (must && !must.test(answer)) problems.push(`answer lacks ${must.source}`)
     const bad = `${answer}\n${results}`.match(BAD)?.[0]
     if (bad) problems.push(`"${bad}"`)
