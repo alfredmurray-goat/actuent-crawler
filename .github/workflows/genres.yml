@@ -1,0 +1,19 @@
+name: Concert Genres
+# Daily: genres for upcoming concerts that don't have one yet (genres.ts; Wikidata, no LLM).
+on:
+  schedule:
+    - cron: '15 4 * * *'
+  workflow_dispatch:
+jobs:
+  genres:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm install
+      - run: npx tsx genres.ts
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}

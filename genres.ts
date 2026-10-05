@@ -103,3 +103,25 @@ export async function addGenres<T extends Ev>(events: T[], maxLookups = 400): Pr
   }
   return events
 }
+
+// Daily: every upcoming concert in lawp_events without a genre (venues found by the general venue
+// crawl, not only the music readers). Only events that look like music, so "rock climbing" stays out.
+const MUSICAL = /\b(concerts?|koncert(er)?|konsert(er)?|konzert(e)?|live music|livemusik|gig|tour|band|dj|orchestra|orkester|symphony|symfoni|jazz|quartet|kvartet|choir|kor|album release|release party|in concert|live)\b/i
+async function genresForAll() {
+  const now = encodeURIComponent(new Date().toISOString()), soon = encodeURIComponent(new Date(Date.now() + 45 * 86400000).toISOString())
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/lawp_events?select=url,name,description,venue&start_date=gte.${now}&start_date=lte.${soon}&or=(description.is.null,description.not.ilike.*Genre:*)&order=start_date.asc&limit=5000`, { headers: SUPABASE_HEADERS })
+  const rows: (Ev & { venue?: string })[] = r.ok ? await r.json() : []
+  const music = rows.filter(e => MUSICAL.test(`${e.name} ${e.description || ""} ${e.venue || ""}`))
+  console.log(`${rows.length} upcoming events without a genre, ${music.length} look like music`)
+  const before = new Map(music.map(e => [e.url, e.description || ""]))
+  await addGenres(music, Number(process.env.MAX_LOOKUPS || 500))
+  let saved = 0
+  for (const e of music) {
+    if (e.description === before.get(e.url)) continue
+    const u = await fetch(`${SUPABASE_URL}/rest/v1/lawp_events?url=eq.${encodeURIComponent(e.url)}`, { method: "PATCH", headers: { ...SUPABASE_HEADERS, "Content-Type": "application/json", "Prefer": "return=minimal" }, body: JSON.stringify({ description: e.description }) }).catch(() => null)
+    if (u?.ok) saved++
+  }
+  console.log(`${saved} concerts got a genre`)
+}
+
+if (process.argv[1]?.endsWith("genres.ts")) genresForAll().catch(e => { console.error(e); process.exit(1) })
