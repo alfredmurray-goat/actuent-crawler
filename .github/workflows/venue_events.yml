@@ -2,6 +2,8 @@ name: Venue Events
 on:
   schedule:
     - cron: '0 3 * * 1,4'
+    # Launch week: every day, so tonight's shows are always there (the heavy venue crawl stays paused).
+    - cron: '30 3 12-20 10 *'
   workflow_dispatch:
     inputs:
       readers_only:
