@@ -18,6 +18,10 @@ jobs:
       - run: npx tsx backup.ts
         env:
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+      # Proof it opens: decrypt it again and count the rows (the decrypted copy isn't uploaded).
+      - run: npx tsx backup.ts restore backup/*.bin && rm backup/*.json
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
       - uses: actions/upload-artifact@v4
         with:
           name: actuent-backup
