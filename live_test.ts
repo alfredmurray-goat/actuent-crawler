@@ -7,7 +7,7 @@
 import { appendFileSync } from "fs"
 
 const MCP = process.env.MCP_URL || "https://agents.actuent.ai/api/mcp"
-const MODELS = (process.env.LIVE_TEST_MODELS || "openai/gpt-oss-120b,llama-3.3-70b-versatile").split(",")
+const MODELS = (process.env.LIVE_TEST_MODELS || "openai/gpt-oss-120b,openai/gpt-oss-20b,qwen/qwen3-32b").split(",")
 const today = new Date().toISOString().slice(0, 10)
 const SYSTEM = `You are an AI assistant chatting with a user. Today is ${today}. You have Actuent's tools for live information: use them for anything current, local, priced or event-related. Answer helpfully and concisely, naming the places, events or products you found.`
 
@@ -42,11 +42,17 @@ async function mcp(method: string, params: any = {}): Promise<any> {
   return d?.result
 }
 
-async function chat(model: string, messages: any[], tools: any[]): Promise<any> {
+async function chat(model: string, messages: any[], tools: any[], opts: { tries?: number } = {}): Promise<any> {
   const r = await fetch("https://api.groq.com/openai/v1/chat/completions", {
     method: "POST", headers: { "Authorization": `Bearer ${process.env.GROQ_API_KEY}`, "Content-Type": "application/json" },
     body: JSON.stringify({ model, messages, tools, tool_choice: "auto", temperature: 0.2, max_tokens: 1200 }), signal: AbortSignal.timeout(90000)
   })
+  // Free Groq: ~8,000 tokens a minute per model. On a rate limit, wait as long as it says and try again.
+  if (r.status === 429 && (opts.tries || 0) < 4) {
+    const wait = Math.min(60, Number(r.headers.get("retry-after")) || 20)
+    await new Promise(res => setTimeout(res, wait * 1000))
+    return chat(model, messages, tools, { tries: (opts.tries || 0) + 1 })
+  }
   if (!r.ok) throw new Error(`${model}: ${r.status} ${(await r.text()).slice(0, 200)}`)
   return (await r.json()).choices[0].message
 }
@@ -66,7 +72,7 @@ async function ask(question: string, tools: any[]): Promise<{ used: string[], an
       let args: any = {}
       try { args = JSON.parse(call.function.arguments || "{}") } catch {}
       const out = await mcp("tools/call", { name: call.function.name, arguments: args })
-      const text = (out?.content || []).map((c: any) => c.text || "").join("\n").slice(0, 12000)
+      const text = (out?.content || []).map((c: any) => c.text || "").join("\n").slice(0, 6000)
       results += text
       messages.push({ role: "tool", tool_call_id: call.id, content: text || "(empty)" })
       await new Promise(r => setTimeout(r, 4000)) // stays under the free limit of 20 tool calls a minute
@@ -78,7 +84,7 @@ async function ask(question: string, tools: any[]): Promise<{ used: string[], an
 async function main() {
   if (!process.env.GROQ_API_KEY) { console.error("Missing GROQ_API_KEY"); process.exit(1) }
   const list = await mcp("tools/list")
-  const tools = (list?.tools || []).map((t: any) => ({ type: "function", function: { name: t.name, description: String(t.description || "").slice(0, 1000), parameters: t.inputSchema || { type: "object", properties: {} } } }))
+  const tools = (list?.tools || []).map((t: any) => ({ type: "function", function: { name: t.name, description: String(t.description || "").slice(0, 350), parameters: t.inputSchema || { type: "object", properties: {} } } }))
   if (!tools.length) { console.error("Couldn't list Actuent's tools"); process.exit(1) }
   const only = process.env.ONLY?.trim() ? process.env.ONLY.split(",").map(Number) : null
   const rows: string[] = []
@@ -97,6 +103,7 @@ async function main() {
     if (!problems.length) passed++
     const line = `${problems.length ? "✗" : "✓"} ${question} — ${used.join(", ") || "no tools"} (${Math.round((Date.now() - started) / 1000)} s)${problems.length ? ` — ${problems.join("; ")}` : ""}`
     console.log(line + `\n    ${answer.replace(/\s+/g, " ").slice(0, 300)}`)
+    await new Promise(r => setTimeout(r, 30000)) // the free token budget refills between questions
     rows.push(`| ${problems.length ? "✗" : "✓"} | ${question} | ${used.join(", ") || "–"} | ${problems.join("; ") || ""} | ${answer.replace(/\s+/g, " ").replace(/\|/g, "/").slice(0, 160)} |`)
   }
   const score = total ? Math.round(passed / total * 100) : 0
