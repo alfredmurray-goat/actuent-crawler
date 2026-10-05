@@ -1,0 +1,30 @@
+name: Retry Failed Jobs
+# Hourly: a job whose latest run failed (a busy database, a network blip) gets one automatic retry.
+# Not the jobs whose failure IS the alert (speed, usage, live test, backup), and never a retry of a
+# retry, so nothing loops. A job that fails again stays failed for a person to look at.
+on:
+  schedule:
+    - cron: '50 * * * *'
+  workflow_dispatch:
+permissions:
+  actions: write
+  contents: read
+jobs:
+  retry:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          SKIP='Search Speed Alert|Usage Watchdog|Live Assistant Test|Weekly Backup|Retry Failed Jobs|Launch Question Test'
+          since=$(date -u -d '-6 hours' +%Y-%m-%dT%H:%M:%SZ)
+          gh run list -R "$REPO" --limit 100 --json databaseId,workflowName,conclusion,status,attempt,createdAt \
+            --jq ".[] | select(.createdAt > \"$since\")" | jq -s 'group_by(.workflowName) | map(sort_by(.createdAt) | last) | .[]
+              | select(.status == "completed" and .conclusion == "failure" and .attempt == 1) | "\(.databaseId)\t\(.workflowName)"' -r |
+          while IFS=$'\t' read -r id name; do
+            if echo "$name" | grep -Eq "^($SKIP)$"; then echo "skip: $name"; continue; fi
+            echo "retrying: $name ($id)"
+            gh run rerun "$id" -R "$REPO" --failed || true
+          done
