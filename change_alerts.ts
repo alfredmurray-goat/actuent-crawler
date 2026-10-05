@@ -39,6 +39,19 @@ async function linkWorks(url: string): Promise<boolean> {
 const hoursText = (h: any[] | undefined) => (h || []).map(x => `${x.days.join(", ")} ${x.opens}–${x.closes}`).join("; ")
 const specialText = (h: any[] | undefined) => (h || []).map(x => `${x.from}${x.to !== x.from ? ` to ${x.to}` : ""}: ${x.closed ? "closed" : `${x.opens}–${x.closes}`}`).join("; ")
 
+// What's wrong with a site's own lawp.json, in plain words (null when it's fine).
+async function lawpProblem(domain: string): Promise<string | null> {
+  const r = await fetchPublic(`https://${domain}/.well-known/lawp.json`, { headers: { "User-Agent": USER_AGENT, "Accept": "application/json" }, signal: AbortSignal.timeout(10000) }).catch(() => null)
+  if (!r) return "it couldn't be reached"
+  if (!r.ok) return `it answers with an error (HTTP ${r.status}); it should be at /.well-known/lawp.json`
+  let d: any
+  try { d = JSON.parse(await r.text()) } catch { return "it isn't valid JSON any more (a missing comma or quote?)" }
+  if (!d || typeof d !== "object") return "it isn't a JSON object"
+  if (!d.name) return "the \"name\" field is missing"
+  if (!Array.isArray(d.actions)) return "the \"actions\" list is missing"
+  return null
+}
+
 async function check(site: any): Promise<string[]> {
   const changes: string[] = []
   const [before] = await get(`site_watch?select=*&domain=eq.${encodeURIComponent(site.domain)}`)
@@ -53,8 +66,16 @@ async function check(site: any): Promise<string[]> {
   const links = [...new Set((site.actions || []).map((a: any) => a.url).filter((u: any) => typeof u === "string" && /^https:\/\//.test(u)))].slice(0, 10) as string[]
   const broken: string[] = []
   for (const url of links) if (!await linkWorks(url)) broken.push(url)
+  // The site's own lawp.json (sites that publish one): still there, still valid JSON, still listing
+  // actions. Remembered with the broken links ("lawp.json: …"), so the owner hears once, not daily.
+  if (site.native) {
+    const problem = await lawpProblem(site.domain)
+    if (problem) broken.push(`lawp.json: ${problem}`)
+  }
   const newlyBroken = broken.filter(u => !(before?.broken_links || []).includes(u))
-  for (const u of newlyBroken) changes.push(`This link now shows an error or "not found", so agents can't send people there: ${u}`)
+  for (const u of newlyBroken) changes.push(u.startsWith("lawp.json: ")
+    ? `Your /.well-known/lawp.json has a problem, so AI agents fall back to guessing about your site: ${u.slice(11)}. Check it at https://docs.actuent.ai/checklist?site=${site.domain}`
+    : `This link now shows an error or "not found", so agents can't send people there: ${u}`)
   // Prices that changed since the last check.
   const since = before?.checked_at || new Date(Date.now() - 86400000).toISOString()
   const priced = await get(`lawp_items?select=name,price,currency,previous_price_eur,price_eur&domain=eq.${encodeURIComponent(site.domain)}&price_changed_at=gte.${encodeURIComponent(since)}&limit=20`).catch(() => [])
@@ -87,7 +108,7 @@ async function notify(site: any, changes: string[]) {
 
 async function main() {
   if (launchWeekPause()) return
-  const sites = await get(`lawp_sites?select=domain,actions,owner_key,score_emails&owner_key=not.is.null&change_alerts=is.true&limit=1000`)
+  const sites = await get(`lawp_sites?select=domain,actions,owner_key,score_emails,native&owner_key=not.is.null&change_alerts=is.true&limit=1000`)
     .catch(async () => get(`lawp_sites?select=domain,actions,owner_key,score_emails&owner_key=not.is.null&limit=1000`)) // before list_seventeen.sql
   console.log(`${sites.length} claimed sites to watch`)
   let alerted = 0
