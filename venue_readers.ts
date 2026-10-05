@@ -239,6 +239,38 @@ async function schemaEvents(pages: { url: string, city: string, country: string 
   return out
 }
 
+// Squarespace event calendars (many small venues use them): the calendar page's ?format=json lists the
+// upcoming events with start times in milliseconds. `about` says what kind of place it is, so a search
+// for "comedy" finds a comedian's name at a comedy club.
+async function squarespace(pages: { url: string, venue: string, city: string, country: string, about: string }[]): Promise<Ev[]> {
+  const out: Ev[] = []
+  for (const p of pages) {
+    // Calendar views list a month in `items` (with a next page), list views use `upcoming`.
+    const list: any[] = [], seen = new Set<string>()
+    let next: string | null = `${p.url}?format=json`
+    for (let page = 0; next && page < 4; page++) {
+      const r = await get(next)
+      const d: any = r ? await r.json().catch(() => null) : null
+      list.push(...(d?.upcoming || []), ...(d?.items || []))
+      next = d?.pagination?.nextPage && d.pagination.nextPageUrl ? new URL(`${d.pagination.nextPageUrl}${d.pagination.nextPageUrl.includes("?") ? "&" : "?"}format=json`, p.url).href : null
+      if (next) await pause(1000)
+    }
+    for (const e of list) {
+      if (seen.has(e?.fullUrl)) continue
+      seen.add(e?.fullUrl)
+      if (!e?.title || !e.startDate || !e.fullUrl) continue
+      const excerpt = text(String(e.excerpt || "")).slice(0, 300)
+      out.push({
+        url: new URL(e.fullUrl, p.url).href, name: text(e.title).replace(/^SOLD OUT\s*[|:-]\s*/i, "SOLD OUT: "),
+        start_date: new Date(Number(e.startDate)).toISOString(), venue: e.location?.addressTitle || p.venue,
+        city: p.city, country: p.country, description: [p.about, excerpt].filter(Boolean).join(" ")
+      })
+    }
+    await pause(1000)
+  }
+  return out
+}
+
 // Los Angeles Public Library: daytime events (storytimes, workshops, nature walks, exhibitions) from
 // the main events page and each of its ~73 branch pages (one page a second). Exhibitions that already
 // started show from today at 10:00.
@@ -413,6 +445,9 @@ export const READERS: Record<string, () => Promise<Ev[]>> = {
     ["houseofblues.com/orlando", "Orlando"], ["thefillmore.com", "San Francisco"], ["hollywoodpalladium.com", "Los Angeles"], ["fillmoresilverspring.com", "Silver Spring"],
     ["fillmoreauditorium.org", "Denver"], ["fillmoreminneapolis.com", "Minneapolis"], ["thegramercytheatre.com", "New York"]
   ].map(([path, city]) => ({ url: `https://www.${path}`, city, country: "US" }))),
+  "squarespace": () => squarespace([
+    { url: "https://www.thedentheatre.com/calendar", venue: "The Den Theatre", city: "Chicago", country: "US", about: "Comedy (stand-up, improv) and theatre at The Den Theatre, Chicago." }
+  ]),
   "thebellhouseny.com": () => schemaEvents([{ url: "https://www.thebellhouseny.com/calendar", city: "Brooklyn", country: "US" }]),
   "vega.dk": vega,
   "royalarena.dk": royalArena,
