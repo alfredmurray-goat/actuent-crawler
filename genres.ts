@@ -109,8 +109,14 @@ export async function addGenres<T extends Ev>(events: T[], maxLookups = 400): Pr
 const MUSICAL = /\b(concerts?|koncert(er)?|konsert(er)?|konzert(e)?|live music|livemusik|gig|tour|band|dj|orchestra|orkester|symphony|symfoni|jazz|quartet|kvartet|choir|kor|album release|release party|in concert|live)\b/i
 async function genresForAll() {
   const now = encodeURIComponent(new Date().toISOString()), soon = encodeURIComponent(new Date(Date.now() + 45 * 86400000).toISOString())
-  const r = await fetch(`${SUPABASE_URL}/rest/v1/lawp_events?select=url,name,description,venue&start_date=gte.${now}&start_date=lte.${soon}&or=(description.is.null,description.not.ilike.*Genre:*)&order=start_date.asc&limit=5000`, { headers: SUPABASE_HEADERS })
-  const rows: (Ev & { venue?: string })[] = r.ok ? await r.json() : []
+  // The database hands out at most 1,000 rows a request: page through them.
+  const rows: (Ev & { venue?: string })[] = []
+  for (let offset = 0; offset < 30000; offset += 1000) {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/lawp_events?select=url,name,description,venue&start_date=gte.${now}&start_date=lte.${soon}&or=(description.is.null,description.not.ilike.*Genre:*)&order=start_date.asc,url.asc&limit=1000&offset=${offset}`, { headers: SUPABASE_HEADERS })
+    const page: any[] = r.ok ? await r.json() : []
+    rows.push(...page)
+    if (page.length < 1000) break
+  }
   const music = rows.filter(e => MUSICAL.test(`${e.name} ${e.description || ""} ${e.venue || ""}`))
   console.log(`${rows.length} upcoming events without a genre, ${music.length} look like music`)
   const before = new Map(music.map(e => [e.url, e.description || ""]))
