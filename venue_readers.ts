@@ -280,6 +280,73 @@ async function dplLibraries(): Promise<Ev[]> {
   return out
 }
 
+// Oslo's public library (Deichman): "Hva skjer" lists every free event in all branches (storytime,
+// language cafés, courses, concerts, talks), server-rendered; ?page=N shows the first 16×N.
+const NO_MONTHS: Record<string, number> = { jan: 1, feb: 2, mar: 3, apr: 4, mai: 5, jun: 6, jul: 7, aug: 8, sep: 9, okt: 10, nov: 11, des: 12 }
+const NO_KINDS: [RegExp, string][] = [[/fortelling|eventyr|baby|barn|familie/i, "kids family storytime"], [/kurs|læring|språk/i, "class language"], [/konsert|musikk/i, "music concert"],
+  [/samtale|foredrag|debatt/i, "talk"], [/film/i, "film"], [/verksted|skaper/i, "workshop"], [/møteplass/i, "meetup"], [/utstilling/i, "exhibition"], [/spill|gaming/i, "games"]]
+async function deichman(): Promise<Ev[]> {
+  const r = await get("https://deichman.no/hva-skjer?page=60")
+  if (!r) return []
+  const out: Ev[] = [], seen = new Set<string>()
+  const now = new Date(), year = now.getUTCFullYear(), month = now.getUTCMonth() + 1
+  for (const card of (await r.text()).split('<article class="event-card').slice(1)) {
+    const href = card.match(/class="event-card__title"[^>]*href="([^"]+)"/)?.[1]
+    const title = card.match(/<h3[^>]*>([\s\S]*?)<\/h3>/)?.[1]
+    const date = card.match(/<time>[^<]*?(\d{1,2})\.\s*([a-zæøå]+)\.?<\/time>/i)
+    const times = [...card.matchAll(/<time>(\d{1,2}:\d{2})<\/time>/g)].map(m => m[1])
+    if (!href || !title || !date || seen.has(href)) continue
+    seen.add(href)
+    const m = NO_MONTHS[date[2].toLowerCase().slice(0, 3)]
+    if (!m) continue
+    const y = m < month - 1 ? year + 1 : year
+    const kind = text(card.match(/event-card__type">([^<]*)</)?.[1] || "")
+    const english = [...new Set(NO_KINDS.filter(([re]) => re.test(`${kind} ${title}`)).map(([, w]) => w))].join(" ")
+    out.push({
+      url: `https://deichman.no${href}`, name: text(title).trim(), start_date: zoned(y, m, Number(date[1]), times[0] || "10:00", "Europe/Oslo"),
+      venue: text(card.match(/event-card__location"[^>]*>([^<]*)</)?.[1] || "Deichman").trim(), city: "Oslo", country: "NO", price: 0, currency: "NOK",
+      description: `Library event at Deichman, Oslo${kind ? ` (${kind}${english ? `: ${english}` : ""})` : ""}, free.${times[1] ? ` ${times[0]}–${times[1]}.` : ""}`
+    })
+  }
+  return out
+}
+
+// Stockholm's public library: its own GraphQL feed lists ~2,000 events (storytime, book circles,
+// language cafés, talks, workshops) across every branch. robots.txt asks for 5 s between requests.
+const SV_MONTHS: Record<string, number> = { januari: 1, februari: 2, mars: 3, april: 4, maj: 5, juni: 6, juli: 7, augusti: 8, september: 9, oktober: 10, november: 11, december: 12 }
+const SV_KINDS: [RegExp, string][] = [[/barn|rim|ramsor|saga|sagostund|familj|bäbis|baby/i, "kids family storytime"], [/språk|språkcafé|kurs|lär/i, "class language"], [/bokcirkel|läs|författar/i, "books reading"],
+  [/konsert|musik/i, "music concert"], [/samtal|föredrag/i, "talk"], [/film/i, "film"], [/verkstad|workshop|pyssel/i, "workshop"], [/utställning/i, "exhibition"], [/spel|gaming/i, "games"]]
+async function stockholmLibrary(): Promise<Ev[]> {
+  if (!await robotsAllows("biblioteket.stockholm.se", "/graphql")) return []
+  const out: Ev[] = [], today = new Date().toISOString().slice(0, 10)
+  for (let from = 0; from < 2000; from += 500) {
+    const r = await fetch("https://biblioteket.stockholm.se/graphql", {
+      method: "POST", headers: { ...HEADERS, "Content-Type": "application/json" }, signal: AbortSignal.timeout(30000),
+      body: JSON.stringify({ query: `{ eventSearch(from: ${from}, size: 500) { results events { title eventSlugId library location dateTime { startDate startTime stopTime } category targetAudiences canceled } } }` })
+    }).catch(() => null)
+    const d: any = r?.ok ? await r.json().catch(() => null) : null
+    const list: any[] = d?.data?.eventSearch?.events || []
+    for (const e of list) {
+      const m = String(e?.dateTime?.startDate || "").match(/(\d{1,2}) ([a-zåäö]+) (\d{4})/i)
+      if (!e?.title || !e.eventSlugId || e.canceled || !m || !SV_MONTHS[m[2].toLowerCase()]) continue
+      const ymd = `${m[3]}-${String(SV_MONTHS[m[2].toLowerCase()]).padStart(2, "0")}-${m[1].padStart(2, "0")}`
+      if (ymd < today) continue // ongoing exhibitions that started earlier are skipped
+      const time = /^\d{2}:\d{2}$/.test(e.dateTime.startTime) && e.dateTime.startTime !== "00:00" ? e.dateTime.startTime : "10:00"
+      const kinds = `${e.category || ""} ${(e.targetAudiences || []).join(" ")} ${e.title}`
+      const english = [...new Set(SV_KINDS.filter(([re]) => re.test(kinds)).map(([, w]) => w))].join(" ")
+      out.push({
+        url: `https://biblioteket.stockholm.se/evenemang/${e.eventSlugId}`, name: text(e.title).trim(),
+        start_date: zoned(Number(m[3]), SV_MONTHS[m[2].toLowerCase()], Number(m[1]), time, "Europe/Stockholm"),
+        venue: e.library || "Stockholms stadsbibliotek", city: "Stockholm", country: "SE",
+        description: `Library event in Stockholm${e.category ? ` (${e.category}${english ? `: ${english}` : ""})` : ""}.${e.dateTime.stopTime && e.dateTime.stopTime !== "00:00" && time !== "10:00" ? ` ${time}–${e.dateTime.stopTime}.` : ""}`
+      })
+    }
+    if (list.length < 500) break
+    await pause(5000)
+  }
+  return out
+}
+
 // Squarespace event calendars (many small venues use them): the calendar page's ?format=json lists the
 // upcoming events with start times in milliseconds. `about` says what kind of place it is, so a search
 // for "comedy" finds a comedian's name at a comedy club.
@@ -504,6 +571,8 @@ export const READERS: Record<string, () => Promise<Ev[]>> = {
     ["fillmoreauditorium.org", "Denver"], ["fillmoreminneapolis.com", "Minneapolis"], ["thegramercytheatre.com", "New York"]
   ].map(([path, city]) => ({ url: `https://www.${path}`, city, country: "US" }))),
   "dpl-libraries": dplLibraries,
+  "deichman.no": deichman,
+  "biblioteket.stockholm.se": stockholmLibrary,
   "squarespace": () => squarespace([
     { url: "https://www.thedentheatre.com/calendar", venue: "The Den Theatre", city: "Chicago", country: "US", about: "Comedy (stand-up, improv) and theatre at The Den Theatre, Chicago." }
   ]),
