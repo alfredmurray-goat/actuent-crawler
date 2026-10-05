@@ -15,9 +15,13 @@ const TIME_BUDGET_MS = parseInt(process.env.TIME_BUDGET_MIN || "90") * 60000
 // The brands (and models) people ask assistants about most.
 const BRANDS = /\/(nike|hoka|brooks|asics|on|on-running|saucony|new-balance|adidas|ugg|birkenstock|crocs|converse|vans|dr-martens|the-north-face|patagonia|merrell|salomon|altra|timberland|teva|keen|allbirds|reebok|puma|mizuno|clarks|sorel|columbia)-/i
 
-type Shop = { domain: string, sitemapIndex: string, productPath: RegExp, currency: string }
+// allBrands: a brand's own shop (apple.com), where every product counts, not only BRANDS.
+type Shop = { domain: string, sitemapIndex: string, productPath: RegExp, currency: string, allBrands?: boolean }
 const SHOPS: Shop[] = [
-  { domain: "zappos.com", sitemapIndex: "https://www.zappos.com/sitemap/product_index.xml", productPath: /^https:\/\/www\.zappos\.com\/p\/[^/]+\/product\/\d+/, currency: "USD" }
+  { domain: "zappos.com", sitemapIndex: "https://www.zappos.com/sitemap/product_index.xml", productPath: /^https:\/\/www\.zappos\.com\/p\/[^/]+\/product\/\d+/, currency: "USD" },
+  { domain: "roadrunnersports.com", sitemapIndex: "https://www.roadrunnersports.com/sitemap_products.xml", productPath: /^https:\/\/www\.roadrunnersports\.com\/product\/\d+\//, currency: "USD" },
+  { domain: "dsw.com", sitemapIndex: "https://www.dsw.com/sitemap/cs_index.xml", productPath: /^https:\/\/www\.dsw\.com\/product\//, currency: "USD" },
+  { domain: "apple.com", sitemapIndex: "https://www.apple.com/shop/sitemaps/buy.xml", productPath: /^https:\/\/www\.apple\.com\/shop\/buy-[a-z-]+\/[a-z0-9-]+$/, currency: "USD", allBrands: true }
 ]
 
 async function getText(url: string, timeoutMs = 20000): Promise<string | null> {
@@ -51,7 +55,8 @@ async function itemFrom(shop: Shop, url: string): Promise<Item | null> {
   const offer = [].concat(p.offers?.offers || p.offers || [])[0] as any
   const price = Number(offer?.price ?? offer?.lowPrice)
   const brand = typeof p.brand === "string" ? p.brand : p.brand?.name
-  const name = String(brand && !String(p.name).toLowerCase().startsWith(String(brand).toLowerCase()) ? `${brand} ${p.name}` : p.name).slice(0, 200)
+  // The brand in front unless the name already has it ("Men's Brooks Shield…" stays as it is).
+  const name = String(brand && !String(p.name).toLowerCase().includes(String(brand).toLowerCase()) ? `${brand} ${p.name}` : p.name).slice(0, 200)
   const gtin = [p.gtin13, p.gtin12, p.gtin14, p.gtin8, p.gtin].map(x => String(x || "").trim()).find(x => /^\d{8,14}$/.test(x)) || null
   const currency = offer?.priceCurrency || shop.currency
   return {
@@ -68,14 +73,18 @@ async function main() {
   for (const shop of SHOPS.filter(s => !process.env.SHOP || s.domain === process.env.SHOP)) {
     const index = await getText(shop.sitemapIndex)
     if (!index) { console.log(`${shop.domain}: no sitemap (or robots.txt says no)`); continue }
-    const urls: string[] = []
+    // Paths start with the brand, after "mens-"/"womens-" on some shops ("/product/46149/mens-adidas-…").
+    const wanted = (u: string) => shop.productPath.test(u) && (shop.allBrands || BRANDS.test(new URL(u).pathname.replace(/\/(mens|womens|men|women|unisex)-/gi, "/")))
+      && !/(kids?|toddler|infant|baby|little-kid|big-kid|youth)\b|\/brooks-brothers-/i.test(u)
+    // The "index" may already be the product sitemap itself (a list of product pages).
+    const urls: string[] = locs(index).filter(wanted)
     // Product sitemaps in random order, so each run covers different products.
-    const maps = locs(index).sort(() => Math.random() - 0.5)
+    const maps = urls.length ? [] : locs(index).filter(u => /\.xml/.test(u)).sort(() => Math.random() - 0.5)
     for (const map of maps) {
       if (urls.length >= PER_SHOP * 3) break
       const xml = await getText(map, 60000)
       // Kids' products are skipped: adult searches leave them out anyway, and they'd only take space.
-      if (xml) urls.push(...locs(xml).filter(u => shop.productPath.test(u) && BRANDS.test(new URL(u).pathname) && !/(kids?|toddler|infant|baby|little-kid|big-kid|youth)\b|\/brooks-brothers-/i.test(u)))
+      if (xml) urls.push(...locs(xml).filter(wanted))
     }
     const picked = [...new Set(urls)].sort(() => Math.random() - 0.5).slice(0, PER_SHOP)
     console.log(`${shop.domain}: ${urls.length} product pages for popular brands, reading ${picked.length}`)
