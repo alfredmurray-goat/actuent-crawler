@@ -1,6 +1,7 @@
 import { saveEvents, robotsAllows } from "./shared"
 import { USER_AGENT } from "./robots"
 import { extractEvents } from "./business"
+import { addGenres } from "./genres"
 
 // Readers for big venues whose concerts aren't published as schema.org events (so the
 // generic venue_events reader finds nothing): each reads the venue's own listing (its CMS API, the
@@ -35,7 +36,7 @@ function nextDate(d: number, m: number, time: string): string {
   const iso = local(y, m, d, time)
   return Date.parse(iso) < now.getTime() - 30 * 86400000 ? local(y + 1, m, d, time) : iso
 }
-const text = (v: string) => String(v || "").replace(/<[^>]+>/g, " ").replace(/&#(\d+);/g, (_, c) => String.fromCodePoint(Number(c)))
+const text = (v: string) => String(v || "").replace(/<[^>]+>/g, " ").replace(/&#(\d+);/g, (_, c) => String.fromCodePoint(Number(c))).replace(/&#x([0-9a-f]+);/gi, (_, c) => String.fromCodePoint(parseInt(c, 16)))
   .replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/&nbsp;/g, " ").replace(/&(aelig|AElig|oslash|Oslash|aring|Aring|eacute|Eacute|auml|Auml|ouml|Ouml|uuml|Uuml|ndash|mdash|hellip|rsquo|lsquo|rdquo|ldquo);/g, (_, n) => ({ aelig: "æ", AElig: "Æ", oslash: "ø", Oslash: "Ø", aring: "å", Aring: "Å", eacute: "é", Eacute: "É", auml: "ä", Auml: "Ä", ouml: "ö", Ouml: "Ö", uuml: "ü", Uuml: "Ü", ndash: "–", mdash: "—", hellip: "…", rsquo: "’", lsquo: "‘", rdquo: "”", ldquo: "“" } as Record<string, string>)[n]).replace(/\s+/g, " ").trim()
 const upcoming = (e: Ev) => Date.parse(e.start_date) > Date.now() - 6 * 3600000
 
@@ -497,12 +498,15 @@ export const READERS: Record<string, () => Promise<Ev[]>> = {
   "pumpehuset.dk": () => concertPages(["https://pumpehuset.dk/concert-sitemap.xml", "https://pumpehuset.dk/concert-sitemap4.xml"], pumpehuset)
 }
 
+// Music venues: their events get a genre (genres.ts).
+const MUSIC = new Set(["vega.dk", "royalarena.dk", "drkoncerthuset.dk", "ab-b.dk", "pumpehuset.dk", "aegpresents.com", "mercuryeastpresents.com", "irvingplaza.com", "livenation.com", "thebellhouseny.com"])
 export async function readVenues(only?: string[]): Promise<number> {
   let total = 0
   for (const [domain, read] of Object.entries(READERS)) {
     if (only?.length && !only.includes(domain)) continue
     try {
-      const events = (await read()).filter(e => e.name && upcoming(e))
+      let events = (await read()).filter(e => e.name && upcoming(e))
+      if (MUSIC.has(domain)) events = await addGenres(events)
       for (let i = 0; i < events.length; i += 200) await saveEvents(domain, events.slice(i, i + 200))
       console.log(`${domain}: ${events.length} events`)
       total += events.length
@@ -517,8 +521,9 @@ if (process.argv[1]?.endsWith("venue_readers.ts")) {
     (async () => {
       for (const [domain, read] of Object.entries(READERS)) {
         if (process.env.ONLY && !process.env.ONLY.split(",").includes(domain)) continue
-        const ev = (await read()).filter(upcoming)
-        console.log(`${domain}: ${ev.length}`, ev.slice(0, 3).map(e => `${e.start_date} ${e.name} | ${e.venue} | ${e.price ?? ""}`))
+        let ev = (await read()).filter(upcoming)
+        if (MUSIC.has(domain)) ev = await addGenres(ev.slice(0, 15), 15)
+        console.log(`${domain}: ${ev.length}`, ev.slice(0, MUSIC.has(domain) ? 15 : 3).map(e => `${e.start_date} ${e.name} | ${e.venue} | ${e.price ?? ""}${MUSIC.has(domain) ? ` | ${(e.description || "").match(/Genre: [^.]+/)?.[0] || "-"}` : ""}`))
       }
     })()
   } else {
