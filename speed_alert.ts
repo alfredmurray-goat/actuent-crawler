@@ -24,8 +24,21 @@ async function recordUptime() {
   console.log(`Status check: search ${ok ? "answered" : "did NOT answer"} in ${ms} ms; site page ${site_ms} ms, autocomplete ${autocomplete_ms} ms, badge ${badge_ms} ms`)
 }
 
+// The shared allowance for signed-out Claude.ai/ChatGPT users (actuent-private api/mcp.ts) more than
+// 75% used, or full, in the last hour: fail so GitHub emails Alfred (raise it in mcp.ts if it's real use).
+async function platformLimits() {
+  const since = encodeURIComponent(new Date(Date.now() - 3600_000).toISOString())
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/usage_counters?select=key,count&key=like.platform_*&window_start=gte.${since}`, { headers: SUPABASE_HEADERS }).catch(() => null)
+  for (const row of r?.ok ? await r.json() : []) {
+    const [kind, platform] = String(row.key).replace(/^platform_/, "").split(":")
+    console.log(`::error::${platform === "anthropic" ? "Claude.ai" : "ChatGPT"} users ${kind === "full" ? "hit" : "came close to"} Actuent's shared limit (600 tool calls a minute) ${row.count} times in the last hour. If this is real use, raise the platform limit in actuent-private api/mcp.ts.`)
+    process.exitCode = 1
+  }
+}
+
 async function main() {
   await recordUptime()
+  await platformLimits()
   const since = encodeURIComponent(new Date(Date.now() - 3600_000).toISOString())
   const r = await fetch(`${SUPABASE_URL}/rest/v1/searches?select=duration_ms&created_at=gte.${since}&duration_ms=not.is.null&limit=10000`, { headers: SUPABASE_HEADERS })
   const times = (r.ok ? await r.json() : []).map((x: any) => Number(x.duration_ms)).sort((a: number, b: number) => a - b)
