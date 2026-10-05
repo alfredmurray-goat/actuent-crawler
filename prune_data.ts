@@ -23,7 +23,8 @@ const RULES: { table: string, filter: string, why: string }[] = [
   { table: "search_misses", filter: `checked_at=lt.${days(60)}`, why: "search misses: 60 days" },
   { table: "site_scores", filter: `week=lt.${days(56).slice(0, 10)}`, why: "weekly scores: 8 weeks" },
   { table: "lawp_events", filter: `start_date=lt.${days(60)}`, why: "past events: 60 days after they start" },
-  { table: "usage_counters", filter: `window_start=lt.${days(2)}`, why: "usage counters: 2 days" },
+  { table: "usage_counters", filter: `window_start=lt.${days(2)}&key=not.like.tool_day*`, why: "usage counters: 2 days" },
+  { table: "usage_counters", filter: `window_start=lt.${days(35)}&key=like.tool_day*`, why: "Pro tool use per day: 35 days" },
   { table: "rate_limits", filter: `window_start=lt.${days(1)}`, why: "rate-limit records: a day" },
   { table: "blocked", filter: `until=lt.${days(1)}`, why: "expired blocks" },
   { table: "uptime_checks", filter: `checked_at=lt.${days(90)}`, why: "uptime checks: 90 days" }
