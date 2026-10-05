@@ -1,6 +1,6 @@
 import { SUPABASE_URL, SUPABASE_HEADERS } from "./shared"
 
-// Weekly: deletes old rows that aren't needed any more, so the database stays well under the
+// Nightly: deletes old rows that aren't needed any more, so the database stays well under the
 // Supabase free plan's 500 MB, and the retention periods in the privacy policy
 // (docs.actuent.ai/privacy#retention) hold. Only old history is removed; sites and pages never are.
 // DRY_RUN=1 only counts.
@@ -22,7 +22,11 @@ const RULES: { table: string, filter: string, why: string }[] = [
   { table: "name_websites", filter: `checked_at=lt.${days(90)}`, why: "name lookups: 90 days (looked up again when needed)" },
   { table: "search_misses", filter: `checked_at=lt.${days(60)}`, why: "search misses: 60 days" },
   { table: "site_scores", filter: `week=lt.${days(56).slice(0, 10)}`, why: "weekly scores: 8 weeks" },
-  { table: "lawp_events", filter: `start_date=lt.${days(60)}`, why: "past events: 60 days after they start" }
+  { table: "lawp_events", filter: `start_date=lt.${days(60)}`, why: "past events: 60 days after they start" },
+  { table: "usage_counters", filter: `window_start=lt.${days(2)}`, why: "usage counters: 2 days" },
+  { table: "rate_limits", filter: `window_start=lt.${days(1)}`, why: "rate-limit records: a day" },
+  { table: "blocked", filter: `until=lt.${days(1)}`, why: "expired blocks" },
+  { table: "uptime_checks", filter: `checked_at=lt.${days(90)}`, why: "uptime checks: 90 days" }
 ]
 
 // Hidden sites (parked, unreachable, duplicates) never show up in search: their page text and
@@ -68,9 +72,12 @@ async function countRows(table: string, filter: string): Promise<number | null> 
 }
 
 async function main() {
-  await emptyHidden()
-  await thinPrices()
-  await sweepMinimal()
+  // The heavier clean-ups once a week (Wednesday), old rows every night.
+  if (new Date().getUTCDay() === 3 || process.env.FULL === "1") {
+    await emptyHidden()
+    await thinPrices()
+    await sweepMinimal()
+  }
   for (const { table, filter, why } of RULES) {
     const n = await countRows(table, filter)
     if (n === null) { console.log(`${table}: not available, skipped`); continue }

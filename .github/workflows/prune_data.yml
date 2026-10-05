@@ -1,7 +1,7 @@
 name: Prune Old Data
 on:
   schedule:
-    - cron: '0 5 * * 3'
+    - cron: '0 4 * * *'
   workflow_dispatch:
     inputs:
       dry_run:
