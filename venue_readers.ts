@@ -239,6 +239,46 @@ async function schemaEvents(pages: { url: string, city: string, country: string 
   return out
 }
 
+// Danish public libraries (DPL CMS, used by almost every municipality): /api/v1/events lists all
+// upcoming events (talks, kids' activities, film, music, workshops), mostly in the daytime and often
+// free. Categories are Danish, so the English word goes in the description too ("Børn" → kids).
+const DPL_LIBRARIES = [
+  { base: "https://bibliotek.kk.dk", city: "Copenhagen" }, { base: "https://fkb.dk", city: "Copenhagen" },
+  { base: "https://genbib.dk", city: "Gentofte" }, { base: "https://www.aakb.dk", city: "Aarhus" },
+  { base: "https://www.odensebib.dk", city: "Odense" }, { base: "https://www.aalborgbibliotekerne.dk", city: "Aalborg" },
+  { base: "https://www.roskildebib.dk", city: "Roskilde" }, { base: "https://www.randersbib.dk", city: "Randers" },
+  { base: "https://www.esbjergbibliotek.dk", city: "Esbjerg" }, { base: "https://vejlebib.dk", city: "Vejle" }
+]
+const DPL_WORDS: [RegExp, string][] = [
+  [/b(ø|o)rn|famil/i, "kids family"], [/musik|koncert/i, "music concert"], [/film/i, "film"], [/foredrag|debat|samtale/i, "talk"],
+  [/v(æ|ae)rksted|workshop|kreativ/i, "workshop"], [/udstilling/i, "exhibition"], [/litteratur|l(æ|ae)sning|forfatter|bog/i, "books reading"],
+  [/teater/i, "theatre"], [/spil|gaming/i, "games"], [/tur|vandring/i, "walk"], [/sprog|language/i, "language"], [/strik|h(å|aa)ndarbejde/i, "crafts"]
+]
+async function dplLibraries(): Promise<Ev[]> {
+  const out: Ev[] = []
+  for (const lib of DPL_LIBRARIES) {
+    const r = await get(`${lib.base}/api/v1/events`)
+    const list: any[] = r ? await r.json().catch(() => []) : []
+    for (const e of Array.isArray(list) ? list : []) {
+      const start = e?.date_time?.start
+      if (!e?.title || !e.url || !start || e.state === "Occurred" || /aflyst|cancel/i.test(String(e.state || ""))) continue
+      const zip = Number(e.address?.zip_code || e.address?.postal_code || 0)
+      const city = zip && zip < 2800 ? "Copenhagen" : String(e.address?.city || "").trim() || lib.city
+      const kinds = [...(e.categories || []), ...(e.tags || []), ...(e.audiences || [])].join(" ")
+      const english = [...new Set(DPL_WORDS.filter(([re]) => re.test(kinds)).map(([, w]) => w))].join(" ")
+      const price = Number(e.ticket_categories?.[0]?.price?.value)
+      out.push({
+        url: e.url, name: text(e.title), start_date: new Date(start).toISOString(),
+        venue: (e.branches || [])[0] || e.organizer?.name || "Library", city, country: "DK",
+        price: Number.isFinite(price) ? price : null, currency: Number.isFinite(price) ? "DKK" : null,
+        description: [`Library event${english ? ` (${english})` : ""}${price === 0 ? ", free" : ""}.`, text(String(e.description || "")).slice(0, 300)].join(" ")
+      })
+    }
+    await pause(1000)
+  }
+  return out
+}
+
 // Squarespace event calendars (many small venues use them): the calendar page's ?format=json lists the
 // upcoming events with start times in milliseconds. `about` says what kind of place it is, so a search
 // for "comedy" finds a comedian's name at a comedy club.
@@ -445,6 +485,7 @@ export const READERS: Record<string, () => Promise<Ev[]>> = {
     ["houseofblues.com/orlando", "Orlando"], ["thefillmore.com", "San Francisco"], ["hollywoodpalladium.com", "Los Angeles"], ["fillmoresilverspring.com", "Silver Spring"],
     ["fillmoreauditorium.org", "Denver"], ["fillmoreminneapolis.com", "Minneapolis"], ["thegramercytheatre.com", "New York"]
   ].map(([path, city]) => ({ url: `https://www.${path}`, city, country: "US" }))),
+  "dpl-libraries": dplLibraries,
   "squarespace": () => squarespace([
     { url: "https://www.thedentheatre.com/calendar", venue: "The Den Theatre", city: "Chicago", country: "US", about: "Comedy (stand-up, improv) and theatre at The Den Theatre, Chicago." }
   ]),
