@@ -7,7 +7,8 @@
 import { appendFileSync } from "fs"
 
 const MCP = process.env.MCP_URL || "https://agents.actuent.ai/api/mcp"
-const MODELS = (process.env.LIVE_TEST_MODELS || "openai/gpt-oss-120b,openai/gpt-oss-20b,qwen/qwen3-32b").split(",")
+// "cf:" = Cloudflare Workers AI (the crawler's existing key; roomier free limits), "groq:" = Groq.
+const MODELS = (process.env.LIVE_TEST_MODELS || "cf:@cf/meta/llama-3.3-70b-instruct-fp8-fast,groq:openai/gpt-oss-120b,groq:openai/gpt-oss-20b").split(",")
 const today = new Date().toISOString().slice(0, 10)
 const SYSTEM = `You are an AI assistant chatting with a user. Today is ${today}. You have Actuent's tools for live information: use them for anything current, local, priced or event-related. Answer helpfully and concisely, naming the places, events or products you found.`
 
@@ -44,13 +45,17 @@ async function mcp(method: string, params: any = {}): Promise<any> {
 }
 
 async function chat(model: string, messages: any[], tools: any[], opts: { tries?: number } = {}): Promise<any> {
-  const r = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-    method: "POST", headers: { "Authorization": `Bearer ${process.env.GROQ_API_KEY}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ model, messages, tools, tool_choice: "auto", temperature: 0.2, max_tokens: 1200 }), signal: AbortSignal.timeout(90000)
+  const cf = model.startsWith("cf:"), name = model.replace(/^(cf|groq):/, "")
+  if (cf && !(process.env.CLOUDFLARE_ACCOUNT_ID && process.env.CLOUDFLARE_AI_TOKEN)) throw new Error(`${model}: no Cloudflare key`)
+  const url = cf ? `https://api.cloudflare.com/client/v4/accounts/${process.env.CLOUDFLARE_ACCOUNT_ID}/ai/v1/chat/completions` : "https://api.groq.com/openai/v1/chat/completions"
+  const key = cf ? process.env.CLOUDFLARE_AI_TOKEN : process.env.GROQ_API_KEY
+  const r = await fetch(url, {
+    method: "POST", headers: { "Authorization": `Bearer ${key}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ model: name, messages, tools, tool_choice: "auto", temperature: 0.2, max_tokens: 1200 }), signal: AbortSignal.timeout(90000)
   })
-  // Free Groq: ~8,000 tokens a minute per model. On a rate limit, wait as long as it says and try again.
-  if (r.status === 429 && (opts.tries || 0) < 7) {
-    const wait = Math.min(60, Number(r.headers.get("retry-after")) || 20)
+  // Rate limited: wait as long as it says (at most twice), then the next model takes over.
+  if (r.status === 429 && (opts.tries || 0) < 2) {
+    const wait = Math.min(30, Number(r.headers.get("retry-after")) || 15)
     await new Promise(res => setTimeout(res, wait * 1000))
     return chat(model, messages, tools, { tries: (opts.tries || 0) + 1 })
   }
@@ -83,7 +88,7 @@ async function ask(question: string, tools: any[]): Promise<{ used: string[], an
 }
 
 async function main() {
-  if (!process.env.GROQ_API_KEY) { console.error("Missing GROQ_API_KEY"); process.exit(1) }
+  if (!process.env.GROQ_API_KEY && !process.env.CLOUDFLARE_AI_TOKEN) { console.error("Missing GROQ_API_KEY or CLOUDFLARE_AI_TOKEN"); process.exit(1) }
   const list = await mcp("tools/list")
   const tools = (list?.tools || []).map((t: any) => ({ type: "function", function: { name: t.name, description: String(t.description || "").slice(0, 350), parameters: t.inputSchema || { type: "object", properties: {} } } }))
   if (!tools.length) { console.error("Couldn't list Actuent's tools"); process.exit(1) }
