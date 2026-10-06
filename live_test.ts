@@ -71,8 +71,12 @@ async function ask(question: string, tools: any[]): Promise<{ used: string[], an
     let msg: any = null
     for (const model of MODELS) { try { msg = await chat(model, messages, tools); break } catch (e) { console.log(String(e)) } }
     if (!msg) return { used, answer: "(no model answered)", results }
-    messages.push(msg)
     if (!msg.tool_calls?.length) return { used, answer: String(msg.content || ""), results }
+    // Only the standard fields go back (providers add their own, like "refusal", that others reject),
+    // with arguments as a JSON string and an id on every call.
+    msg.tool_calls = msg.tool_calls.map((c: any, i: number) => ({ id: c.id || `call_${turn}_${i}`, type: "function",
+      function: { name: c.function?.name, arguments: typeof c.function?.arguments === "string" ? c.function.arguments : JSON.stringify(c.function?.arguments || {}) } }))
+    messages.push({ role: "assistant", content: String(msg.content || ""), tool_calls: msg.tool_calls })
     for (const call of msg.tool_calls) {
       used.push(call.function.name)
       let args: any = {}
