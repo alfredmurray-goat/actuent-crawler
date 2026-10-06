@@ -1,0 +1,21 @@
+name: Referral Summary
+# The 1st of each month: referrers who earned free months last month hear about it (referral_summary.ts).
+on:
+  schedule:
+    - cron: '0 9 1 * *'
+  workflow_dispatch:
+jobs:
+  summary:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm install
+      - run: npx tsx referral_summary.ts
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
