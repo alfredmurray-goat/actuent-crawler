@@ -14,24 +14,28 @@ const TABLES: { table: string, order: string }[] = [
   { table: "api_keys", order: "created_at" }, { table: "user_site_accounts", order: "created_at" }, { table: "saved_searches", order: "created_at" },
   { table: "price_watches", order: "created_at" }, { table: "newsletter", order: "created_at" }, { table: "referrals", order: "created_at" },
   { table: "site_watch", order: "created_at" }, { table: "client_sites", order: "created_at" }, { table: "webhooks", order: "created_at" },
-  { table: "lawp_sites", order: "domain" }
+  { table: "lawp_sites", order: "domain" } // paged by domain (keyset), 500 rows at a time
 ]
 
 const key = () => createHash("sha256").update(`actuent-backup:${process.env.SUPABASE_SERVICE_KEY}`).digest()
 
 async function dump(table: string, order: string): Promise<any[] | null> {
   const rows: any[] = []
-  for (let offset = 0; ; offset += 1000) {
+  const keyset = table === "lawp_sites", size = keyset ? 500 : 1000
+  for (let offset = 0; ; offset += size) {
     let r: Response | null = null
+    // The sites table: everything but the generated search column, paged by domain.
+    const after = keyset && rows.length ? `&domain=gt.${encodeURIComponent(rows[rows.length - 1].domain)}` : ""
+    const select = keyset ? "select=domain,name,pages,actions,business,category,language,native,owner_key,status,popularity_rank,conversion,updated_at" : "select=*"
     for (let attempt = 0; attempt < 3 && !r?.ok; attempt++) {
-      r = await fetch(`${SUPABASE_URL}/rest/v1/${table}?select=*&order=${order}.asc&limit=1000&offset=${offset}`, { headers: SUPABASE_HEADERS, signal: AbortSignal.timeout(60000) }).catch(() => null)
-      if (r?.status === 404 || r?.status === 400) return offset ? rows : null // table (or column) doesn't exist
+      r = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${select}&order=${order}.asc&limit=${size}${keyset ? after : `&offset=${offset}`}`, { headers: SUPABASE_HEADERS, signal: AbortSignal.timeout(60000) }).catch(() => null)
+      if (r?.status === 404 || r?.status === 400) { console.log(`${table}: ${r.status} ${(await r.text()).slice(0, 200)}`); return offset ? rows : null } // table (or column) doesn't exist
       if (!r?.ok) await new Promise(res => setTimeout(res, 5000))
     }
     if (!r?.ok) throw new Error(`${table}: failed at row ${offset} (${r?.status})`)
     const page: any[] = await r.json()
     rows.push(...page)
-    if (page.length < 1000) return rows
+    if (page.length < size) return rows
     await new Promise(res => setTimeout(res, 200)) // gentle on the free database
   }
 }
