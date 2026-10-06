@@ -70,13 +70,39 @@ export async function fetchSite(domain: string): Promise<Fetched | null> {
 }
 
 // A site's own LAWP from https://<domain>/.well-known/lawp.json always wins over crawling.
+// Where a site's LAWP is: /.well-known/lawp.json, or (for sites that can't publish files there:
+// Squarespace, Wix, Webflow…) the file its homepage points to with <link rel="lawp" href="…">,
+// e.g. Actuent's hosted copy at api.actuent.ai/lawp/<domain>.json.
+async function lawpLink(domain: string): Promise<string | null> {
+  const r = await fetchPublic(`https://${domain}/`, { headers: { "Accept": "text/html", "User-Agent": USER_AGENT }, signal: AbortSignal.timeout(6000) }).catch(() => null)
+  if (!r?.ok) return null
+  const head = (await r.text()).slice(0, 200_000).match(/<head[\s\S]*?<\/head>/i)?.[0] || ""
+  const tag = head.match(/<link[^>]+rel=["']lawp["'][^>]*>/i)?.[0]
+  const href = tag?.match(/href=["']([^"']+)["']/i)?.[1]
+  if (!href) return null
+  try {
+    const u = new URL(href, `https://${domain}/`)
+    const site = domain.replace(/^www\./, "")
+    // Only the site's own host, or Actuent's hosted copy of this same site.
+    if (u.protocol !== "https:") return null
+    if (u.hostname.replace(/^www\./, "") === site || u.hostname.endsWith(`.${site}`)) return u.href
+    if (u.hostname === "api.actuent.ai" && u.pathname === `/lawp/${site}.json`) return u.href
+  } catch {}
+  return null
+}
+
 export async function fetchNative(domain: string): Promise<any | null> {
   try {
     // No redirects: a LAWP file must be served from the site itself.
-    const r = await fetchPublic(`https://${domain}/.well-known/lawp.json`, {
+    let r = await fetchPublic(`https://${domain}/.well-known/lawp.json`, {
       headers: { "Accept": "application/json", "User-Agent": USER_AGENT },
       signal: AbortSignal.timeout(5000)
     }, 0)
+    if (!r?.ok) {
+      const linked = await lawpLink(domain).catch(() => null)
+      if (!linked) return null
+      r = await fetchPublic(linked, { headers: { "Accept": "application/json", "User-Agent": USER_AGENT }, signal: AbortSignal.timeout(5000) }, 0)
+    }
     if (!r?.ok) return null
     const text = await r.text()
     if (text.length > 200_000) return null
