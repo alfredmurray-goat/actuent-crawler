@@ -45,9 +45,12 @@ export async function checkWatches(domain: string, items: Priced[]): Promise<num
     // Back in stock: it was sold out last time and is available now.
     const available = item.available !== false
     if (w.notify_stock && w.last_available === false && available) {
-      await notify(w, domain, { event: "back_in_stock", url: w.url, name, domain, price: item.price, currency: item.currency, price_eur: item.price_eur },
+      // A Shopify item with a known variant: a link that opens the shop's cart with it already in it.
+      const variant = (item as any).variant_id
+      const cartUrl = variant ? `https://${domain.replace(/^www\./, "")}/cart/${variant}:1` : null
+      await notify(w, domain, { event: "back_in_stock", url: w.url, name, domain, price: item.price, currency: item.currency, price_eur: item.price_eur, ...(cartUrl ? { cart_url: cartUrl } : {}) },
         `Back in stock: ${name}`,
-        `<p><strong>${esc(name)}</strong> is available again on ${esc(domain)}${item.price != null ? `, at ${esc(item.price)} ${esc(item.currency || "")}` : ""}.</p><p><a href="${esc(w.url)}">View it on ${esc(domain)} →</a></p>`)
+        `<p><strong>${esc(name)}</strong> is available again on ${esc(domain)}${item.price != null ? `, at ${esc(item.price)} ${esc(item.currency || "")}` : ""}.</p>${cartUrl ? `<p><a href="${esc(cartUrl)}" style="background:#ff8a3d;color:#111;padding:9px 16px;border-radius:6px;text-decoration:none;font-weight:600">Buy it now (opens the shop's cart) →</a></p>` : ""}<p><a href="${esc(w.url)}">View it on ${esc(domain)} →</a></p>`)
       patch.notified_at = new Date().toISOString(); sent++
     }
     if (w.notify_stock !== undefined) patch.last_available = available
