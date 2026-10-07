@@ -1,0 +1,17 @@
+name: Tool Check
+# Mornings until launch week ends: every free Actuent MCP tool called once (tool_check.ts).
+on:
+  schedule:
+    - cron: '45 5 7-20 10 *'
+  workflow_dispatch:
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm install
+      - run: npx tsx tool_check.ts
