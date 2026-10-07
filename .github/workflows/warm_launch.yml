@@ -20,7 +20,7 @@ jobs:
           d=$(date -u +%Y-%m-%d)
           if [[ -n "${{ github.event.inputs.force }}" || ( "$d" > "2026-10-12" && "$d" < "2026-10-17" ) ]]; then echo "go=1" >> $GITHUB_OUTPUT; else echo "Not launch week ($d)"; fi
       - if: steps.when.outputs.go == '1'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - if: steps.when.outputs.go == '1'
         uses: actions/setup-node@v4
         with:
