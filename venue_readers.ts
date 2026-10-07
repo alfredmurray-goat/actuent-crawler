@@ -466,7 +466,8 @@ async function libcal(): Promise<Ev[]> {
 // The Events Calendar (WordPress plugin): the same public JSON API on every site that uses it
 // (/wp-json/tribe/events/v1/events). Parks, gardens, museums and neighbourhood groups: much of it
 // daytime (walks, tours, workshops, festivals). `delay` honours a site's robots.txt Crawl-delay.
-const TRIBE: { site: string, city: string, delay?: number }[] = [
+const TRIBE: { site: string, city: string, delay?: number, pages?: number }[] = [
+  { site: "www.choosechicago.com", city: "Chicago", pages: 30 }, // the city's official calendar: thousands of events
   { site: "www.statenislandmuseum.org", city: "Staten Island" },
   { site: "riversideparknyc.org", city: "New York", delay: 10000 },
   { site: "www.randallsisland.org", city: "New York" },
@@ -486,10 +487,10 @@ async function tribe(): Promise<Ev[]> {
 }
 
 // One site's The Events Calendar feed (also used by the venue crawl when it spots the plugin).
-export async function tribeSite(t: { site: string, city?: string, country?: string, delay?: number }): Promise<Ev[]> {
+export async function tribeSite(t: { site: string, city?: string, country?: string, delay?: number, pages?: number }): Promise<Ev[]> {
   const out: Ev[] = []
   {
-    for (let page = 1; page <= 6; page++) {
+    for (let page = 1; page <= (t.pages || 6); page++) {
       const r = await get(`https://${t.site}/wp-json/tribe/events/v1/events?per_page=50&page=${page}&start_date=now`, { "Accept": "application/json" })
       const d: any = r ? await r.json().catch(() => null) : null
       for (const e of d?.events || []) {
