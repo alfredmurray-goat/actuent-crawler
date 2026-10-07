@@ -22,7 +22,7 @@ jobs:
       - if: steps.when.outputs.go == '1'
         uses: actions/checkout@v4
       - if: steps.when.outputs.go == '1'
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: '24'
       - if: steps.when.outputs.go == '1'
