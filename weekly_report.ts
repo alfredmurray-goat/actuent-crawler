@@ -167,6 +167,7 @@ async function sendNewsletter(week: string, title: string, summary: string) {
 ${summary.split(/\n+/).filter(Boolean).map(x => `<p>${esc(x)}</p>`).join("")}
 <p><a href="${link}">Read it on the web, with the charts →</a></p>
 <p><strong>Your AI got smarter this week:</strong> <a href="https://api.actuent.ai/smarter">see what Lawpy found →</a></p>
+<p><strong>Try this week</strong> (ask your AI, with Actuent connected):</p><ul>${tryThisWeek().map(t => `<li>${esc(t)}</li>`).join("")}</ul>
 <p style="color:#666;font-size:13px">Actuent, made by localilabs. You get this because you signed up for the weekly State of the AI web. <a href="${unsubscribe}">Unsubscribe</a></p>`
     if (await sendEmail(p.email, title, html, { "List-Unsubscribe": `<${unsubscribe}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" })) sent++
   }
@@ -174,3 +175,22 @@ ${summary.split(/\n+/).filter(Boolean).map(x => `<p>${esc(x)}</p>`).join("")}
 }
 
 main().catch(e => { console.error(e); process.exit(1) })
+
+// Three things to ask your AI this week, different every week (the "what your AI learned" part).
+function tryThisWeek(): string[] {
+  const ideas = [
+    "What's on near me this weekend? Add the best one to my calendar.",
+    "Is my size in stock here? (paste any shop link)",
+    "Plan dinner then drinks near me on Friday, and give me a link to send my friends.",
+    "Tell me about [your favourite band] and when they're playing next.",
+    "Which museums are open today, and until when?",
+    "What's the cheapest place to buy [something you want] right now?",
+    "Any jazz (or techno, or comedy) on this week?",
+    "Ask [a restaurant's website] if they have gluten-free options.",
+    "Does [an app you use] have a free plan or a student discount?",
+    "Kids' activities near me tomorrow morning?"
+  ]
+  const week = Math.floor(Date.now() / (7 * 86400000))
+  return [0, 1, 2].map(i => ideas[(week * 3 + i) % ideas.length])
+}
+
