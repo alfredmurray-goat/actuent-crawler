@@ -1,0 +1,20 @@
+name: Landmark Details
+# Weekly: address, location and opening hours from OpenStreetMap for well-known museums and
+# attractions whose own site doesn't publish them (landmarks.ts).
+on:
+  schedule:
+    - cron: '0 3 * * 2'
+  workflow_dispatch:
+jobs:
+  landmarks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm install
+      - run: npx tsx landmarks.ts
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}

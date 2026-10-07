@@ -36,7 +36,7 @@ function time(value: unknown): string | null {
 }
 
 // "Mo-Fr 09:00-17:00" / "Mo,We 10:00-14:00"
-function parseOpeningHoursText(text: string): OpeningHours[] {
+export function parseOpeningHoursText(text: string): OpeningHours[] {
   const out: OpeningHours[] = []
   // Each group is "<day list> <open>-<close>"; day lists can mix ranges and commas ("Sa,Su", "Mo-Fr").
   for (const m of text.matchAll(/([A-Za-z]{2}(?:\s*[-,]\s*[A-Za-z]{2})*)\s+(\d{1,2}:\d{2})\s*-\s*(\d{1,2}:\d{2})/g)) {
