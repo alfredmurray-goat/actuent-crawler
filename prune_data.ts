@@ -27,6 +27,7 @@ const RULES: { table: string, filter: string, why: string }[] = [
   { table: "usage_counters", filter: `window_start=lt.${days(35)}&key=like.tool_day*`, why: "Pro tool use per day: 35 days" },
   { table: "rate_limits", filter: `window_start=lt.${days(1)}`, why: "rate-limit records: a day" },
   { table: "blocked", filter: `until=lt.${days(1)}`, why: "expired blocks" },
+  { table: "action_messages", filter: `created_at=lt.${days(365)}`, why: "messages to businesses: 12 months" },
   { table: "uptime_checks", filter: `checked_at=lt.${days(90)}`, why: "uptime checks: 90 days" }
 ]
 
