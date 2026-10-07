@@ -1,7 +1,7 @@
 name: Monthly AI-Visibility Reports
 on:
   schedule:
-    - cron: '0 9 1 * *'
+    - cron: '30 7 * * 1' # Mondays; the script sends only on the first Monday of the month
   workflow_dispatch:
 jobs:
   report:

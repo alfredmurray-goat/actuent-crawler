@@ -3,7 +3,7 @@ import { SUPABASE_URL, SUPABASE_HEADERS, SUPABASE_SERVICE_KEY } from "./shared"
 import { readiness } from "./score"
 import { sendEmail, esc, emailEnabled, lawpyImg } from "./email"
 
-// Monthly (the 1st): an AI-visibility report for the owner of every claimed site, over the last
+// Monthly (the first Monday): an AI-visibility report for the owner of every claimed site, over the last
 // 30 days: how often AI agents got the site in search results and for which searches, visits
 // Actuent sent to it, AI bot visits, and what's still missing from its LAWP. Same opt-out as the
 // weekly score emails (score_emails). Searches are only named when made at least twice, so no one
@@ -27,8 +27,10 @@ const plain = (q: string) => q && q.length <= 60 && !/[@/:]|\d{4,}|^\[object /.t
 async function report(site: any) {
   const since = new Date(Date.now() - 30 * 86400000).toISOString()
   const d = encodeURIComponent(site.domain)
-  const [searches, clicks, bots] = await Promise.all([
+  const before = new Date(Date.now() - 60 * 86400000).toISOString()
+  const [searches, earlier, clicks, bots] = await Promise.all([
     safe(get(`searches?select=query&domains=cs.${encodeURIComponent(`{"${site.domain}"}`)}&created_at=gte.${encodeURIComponent(since)}&limit=5000`)),
+    safe(get(`searches?select=id&domains=cs.${encodeURIComponent(`{"${site.domain}"}`)}&created_at=gte.${encodeURIComponent(before)}&created_at=lt.${encodeURIComponent(since)}&limit=5000`)),
     safe(get(`link_clicks?select=clicks&domain=eq.${d}&day=gte.${since.slice(0, 10)}`)),
     safe(get(`bot_hits?select=bot,hits&domain=eq.${d}&day=gte.${since.slice(0, 10)}`))
   ])
@@ -38,15 +40,16 @@ async function report(site: any) {
   const byBot: Record<string, number> = {}
   for (const b of bots) byBot[b.bot] = (byBot[b.bot] || 0) + b.hits
   return {
-    appearances: searches.length, topSearches,
+    appearances: searches.length, previous: earlier.length, topSearches,
     visits: clicks.reduce((n: number, c: any) => n + (c.clicks || 0), 0),
     botTotal: Object.values(byBot).reduce((a, b) => a + b, 0), topBots: Object.entries(byBot).sort((a, b) => b[1] - a[1]).slice(0, 3)
   }
 }
 
 async function main() {
-  // Merged into the weekly digest (score_emails.ts) on 30 September 2026: one email a week instead of two kinds.
-  if (process.env.SEND_MONTHLY !== "1") { console.log("Monthly reports are part of the weekly digest now (score_emails.ts). Set SEND_MONTHLY=1 to send one anyway."); return }
+  // Still one email a week: on the first Monday of the month this report goes out instead of that
+  // week's digest (it runs half an hour before score_emails.ts and marks the site as emailed).
+  if (new Date().getUTCDate() > 7 && !process.env.SEND_MONTHLY) { console.log("Not the first Monday of the month: nothing to send"); return }
   if (!emailEnabled) { console.log("RESEND_API_KEY isn't set — skipping monthly reports"); return }
   const sites = await get(`lawp_sites?select=*&owner_key=not.is.null&score_emails=is.true&limit=1000`)
   console.log(`${sites.length} claimed sites get a monthly report`)
@@ -64,7 +67,7 @@ async function main() {
       const html = `${lawpyImg("talk")}<p>Hi,</p>
 <p>Here's how AI agents saw <strong>${esc(site.name || site.domain)}</strong> on Actuent over the last 30 days.</p>
 <table cellpadding="6" style="border-collapse:collapse;font-size:15px">
-<tr><td>In AI agents' search results</td><td><strong>${r.appearances.toLocaleString("en")}</strong> times</td></tr>
+<tr><td>In AI agents' search results</td><td><strong>${r.appearances.toLocaleString("en")}</strong> times${r.previous ? ` <span style="color:#666">(${r.appearances >= r.previous ? "up" : "down"} from ${r.previous.toLocaleString("en")} the month before)</span>` : ""}</td></tr>
 <tr><td>Visits Actuent sent you</td><td><strong>${r.visits.toLocaleString("en")}</strong></td></tr>
 ${r.botTotal ? `<tr><td>AI bot visits (reported)</td><td><strong>${r.botTotal.toLocaleString("en")}</strong> (${r.topBots.map(([b, n]) => `${esc(b)} ${n}`).join(", ")})</td></tr>` : ""}
 <tr><td>Agent-readiness score</td><td><strong>${score}/100</strong></td></tr>
@@ -74,7 +77,10 @@ ${missing.length ? `<p><strong>What's missing from your LAWP:</strong></p><ul>${
 <p><a href="${page}">Your full AI profile and starter files →</a> · <a href="https://api.actuent.ai/site/${encodeURIComponent(site.domain)}?format=lawp">Download your lawp.json</a></p>
 <p style="color:#666;font-size:13px">Actuent, made by localilabs. You get this because you claimed ${esc(site.domain)} on Actuent. <a href="${unsubscribe}">Unsubscribe</a></p>`
       const ok = await sendEmail(account.email, `${site.domain} and AI agents: your ${month} report`, html, { "List-Unsubscribe": `<${unsubscribe}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" })
-      if (ok) sent++
+      if (ok) {
+        sent++
+        await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?domain=eq.${encodeURIComponent(site.domain)}`, { method: "PATCH", headers: { ...SUPABASE_HEADERS, "Content-Type": "application/json", "Prefer": "return=minimal" }, body: JSON.stringify({ score_emailed_at: new Date().toISOString(), last_score: score }) }).catch(() => null)
+      }
     } catch (e) { console.log(`error ${site.domain}: ${e}`) }
   }
   console.log(`Sent ${sent} monthly reports`)
