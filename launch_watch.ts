@@ -3,9 +3,9 @@ import { sendEmail, esc } from "./email"
 
 // Launch days, hourly: what went wrong in the last hour, so it can be fixed while people are trying
 // Actuent: searches that found nothing, "busy" answers and wrong answers users reported
-// (actuent_feedback). Emailed to ALERT_TO (Alfred) and shown in the job summary; quiet hours send nothing.
+// (actuent_feedback). Emailed to ALERT_TO (hello@localilabs.com) and shown in the job summary; quiet hours send nothing.
 
-const TO = process.env.ALERT_TO || "alfredmurray@localilabs.com"
+const TO = process.env.ALERT_TO || "hello@localilabs.com"
 
 async function get(path: string): Promise<any[]> {
   const r = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, { headers: SUPABASE_HEADERS }).catch(() => null)
