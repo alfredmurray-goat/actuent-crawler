@@ -1,0 +1,24 @@
+name: Dead Links Sweep
+# Weekly: dead pages out of the 5,000 best-known sites, and sites that no longer answer hidden (dead_links.ts).
+on:
+  schedule:
+    - cron: '0 2 * * 4'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Only print (1) or change (empty)'
+        default: ''
+jobs:
+  sweep:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm install
+      - run: npx tsx dead_links.ts
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          DRY_RUN: ${{ github.event.inputs.dry_run }}
