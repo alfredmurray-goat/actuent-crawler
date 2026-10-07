@@ -26,7 +26,7 @@ async function check(url: string): Promise<Check> {
     return "ok"
   } catch (e: any) {
     const code = String(e?.cause?.code || e?.code || "")
-    return /ENOTFOUND|EAI_AGAIN|ECONNREFUSED|CERT_HAS_EXPIRED|ERR_TLS_CERT_ALTNAME_INVALID/.test(code) ? "down" : "ok"
+    return /ENOTFOUND|ECONNREFUSED/.test(code) ? "down" : "ok"
   }
 }
 
