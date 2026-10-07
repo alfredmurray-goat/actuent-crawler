@@ -232,10 +232,23 @@ export async function saveSite(site: any, hash?: string, conversion?: "native" |
 
 
 // Upcoming events found on a site (schema.org Event). Needs lawp_events (next_list.sql).
-export async function saveEvents(domain: string, events: { url: string, start_date: string }[]): Promise<void> {
+// To keep the table small: descriptions are cut to about 240 characters (at a sentence or word), library
+// events are kept only for the next 6 weeks (there are thousands, and the readers run again daily) and
+// everything else for the next 6 months.
+export function shortDescription(d: unknown, max = 240): string | null {
+  const t = String(d ?? "").replace(/\s+/g, " ").trim()
+  if (t.length <= max) return t || null
+  const cut = t.slice(0, max)
+  const end = Math.max(cut.lastIndexOf(". "), cut.lastIndexOf("! "), cut.lastIndexOf("? "))
+  return end > max * 0.5 ? cut.slice(0, end + 1) : `${cut.slice(0, cut.lastIndexOf(" ") > 0 ? cut.lastIndexOf(" ") : max)}…`
+}
+export async function saveEvents(domain: string, events: { url: string, start_date: string, description?: string | null }[]): Promise<void> {
+  const soon = Date.now() + 42 * 86400000, later = Date.now() + 183 * 86400000
+  events = events.filter(e => { const t = Date.parse(e.start_date); return !t || t < (/library/i.test(String(e.description || "")) ? soon : later) })
   if (!events.length) return
   const now = new Date().toISOString()
   const unique = events.filter((e, i) => events.findIndex(x => x.url === e.url && x.start_date === e.start_date) === i)
+    .map(e => ({ ...e, description: shortDescription(e.description) }))
   await fetch(`${SUPABASE_URL}/rest/v1/lawp_events?on_conflict=url,start_date`, {
     method: "POST",
     headers: { ...SUPABASE_HEADERS, "Content-Type": "application/json", "Prefer": "resolution=merge-duplicates" },
