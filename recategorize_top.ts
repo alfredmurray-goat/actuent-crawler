@@ -1,7 +1,7 @@
 import { SUPABASE_URL, SUPABASE_HEADERS } from "./shared"
 import { complete } from "./llm"
 import { CATEGORIES } from "./category"
-import { searchNeedsTheDatabase } from "./quiet"
+import { searchNeedsTheDatabase, tooFullToGrow } from "./quiet"
 
 // Nightly: the AI re-checks the category of the best-known sites, a few thousand a night, until all
 // 20,000 are done (then it starts over, a month later). The rule-based categoriser gets big sites
@@ -61,6 +61,8 @@ async function named(domains: string[]) {
 }
 
 async function main() {
+  // Rewriting sites leaves old copies behind until a vacuum: none above 80% of the free database.
+  if (await tooFullToGrow(0.8)) return
   const start = Date.now()
   if (process.env.DOMAINS) return named(process.env.DOMAINS.split(/[\s,]+/).filter(Boolean).slice(0, 25))
   let from = await state()

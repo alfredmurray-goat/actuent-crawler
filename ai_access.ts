@@ -3,7 +3,7 @@
 // knowing it; site pages show the result with a fix. Writes only lawp_sites.ai_access — never
 // updated_at. Rechecks every 30 days. Needs list_five.sql.
 import { fetchPublic } from "./safe-fetch"
-import { launchWeekPause } from "./quiet"
+import { launchWeekPause, tooFullToGrow } from "./quiet"
 
 const SUPABASE_URL = "https://bcmwypjrahtxogytsvuc.supabase.co"
 const KEY = process.env.SUPABASE_SERVICE_KEY!
@@ -75,6 +75,8 @@ async function check(domain: string): Promise<object> {
 }
 
 async function main() {
+  // Rewriting sites leaves old copies behind until a vacuum: none above 80% of the free database.
+  if (await tooFullToGrow(0.8)) return
   if (launchWeekPause()) return
   const start = Date.now()
   let done = 0, withBlocks = 0, lastDomain = ""

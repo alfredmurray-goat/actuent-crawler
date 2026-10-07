@@ -1,5 +1,5 @@
 import { cleanPageText, cleanPages, changedText } from "./boilerplate"
-import { searchNeedsTheDatabase } from "./quiet"
+import { searchNeedsTheDatabase, tooFullToGrow } from "./quiet"
 
 // Weekly: strips cookie banners, menus and copyright lines from page text already in the index
 // (crawled before the crawlers cleaned it themselves). Only non-native, unclaimed sites — a site's
@@ -71,6 +71,8 @@ async function subpages(): Promise<number> {
 }
 
 async function main() {
+  // Rewriting sites leaves old copies behind until a vacuum: none above 80% of the free database.
+  if (await tooFullToGrow(0.8)) return
   await sites()
   await subpages()
 }

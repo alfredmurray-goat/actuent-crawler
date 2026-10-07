@@ -2,7 +2,7 @@ import { SUPABASE_URL, SUPABASE_HEADERS } from "./shared"
 import { fetchPublic, isPublicHost } from "./safe-fetch"
 import { USER_AGENT } from "./robots"
 import { cleanName, cleanTitles } from "./convert"
-import { launchWeekPause } from "./quiet"
+import { launchWeekPause, tooFullToGrow } from "./quiet"
 
 // Weekly index quality pass (list_eleven.sql), in four steps:
 //   1. "Did you mean" vocabulary: rebuilt from site names, titles, keywords and categories.
@@ -159,6 +159,8 @@ async function staleSites() {
 }
 
 async function main() {
+  // Rewriting sites leaves old copies behind until a vacuum: none above 80% of the free database.
+  if (await tooFullToGrow(0.8)) return
   if (launchWeekPause()) return
   await vocabulary()
   await duplicates()

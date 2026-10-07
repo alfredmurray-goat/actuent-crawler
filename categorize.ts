@@ -1,5 +1,5 @@
 import { categorize } from "./category"
-import { searchNeedsTheDatabase } from "./quiet"
+import { searchNeedsTheDatabase, tooFullToGrow } from "./quiet"
 
 // Sets lawp_sites.category for sites without one (rule-based, no LLM). Only the category column is
 // written — never updated_at — so it doesn't disturb the reconvert job's order. Sites that can't be
@@ -51,6 +51,8 @@ async function pass(recheck: boolean): Promise<number> {
 }
 
 async function main() {
+  // Rewriting sites leaves old copies behind until a vacuum: none above 80% of the free database.
+  if (await tooFullToGrow(0.8)) return
   const fresh = await pass(false)
   const rechecked = await pass(true)
   console.log(`Done: ${fresh} new and ${rechecked} rechecked sites in ${Math.round((Date.now() - start) / 60000)} min`)

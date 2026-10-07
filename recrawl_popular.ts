@@ -1,6 +1,6 @@
 import { SUPABASE_URL, SUPABASE_HEADERS, fetchNative, scrapeJina, toLAWP, saveSite, contentHash, robotsAllows } from "./shared"
 import { recordChange } from "./changes"
-import { searchNeedsTheDatabase } from "./quiet"
+import { searchNeedsTheDatabase, tooFullToGrow } from "./quiet"
 import { fingerprint, Fingerprint } from "./freshness"
 
 
@@ -125,6 +125,8 @@ async function markChecked(domain: string, fp: Fingerprint | null, row: any) {
 }
 
 async function main() {
+  // Rewriting sites leaves old copies behind until a vacuum: none above 80% of the free database.
+  if (await tooFullToGrow(0.8)) return
   const start = Date.now()
   const todo = await queue()
   console.log(`${todo.length} ${process.env.TOP_REFRESH === "1" ? "of the 5,000 best-known sites are over a month old" : "in-demand sites are due a refresh"}; doing up to ${MAX_SITES}`)
