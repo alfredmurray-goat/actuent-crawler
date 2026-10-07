@@ -34,7 +34,10 @@ const Q: [string, string | null, RegExp | null][] = [
   ["latest news about openai", "actuent_news", null],
   ["what is actuent?", "none", /internet|live|search/i],
   ["best password manager", null, /1password|bitwarden|dashlane|proton|keeper/i],
-  ["plan a saturday afternoon in copenhagen: lunch, a museum and drinks", null, /lunch/i]
+  ["plan a saturday afternoon in copenhagen: lunch, a museum and drinks", null, /lunch/i],
+  ["tell me about Cat Power and when she's playing next", "actuent_about", /cat power/i],
+  ["is size 9 in stock here? https://www.allbirds.com/products/mens-tree-runners", "actuent_get_page", /9|stock|sold/i],
+  ["add a jazz concert in copenhagen this week to my calendar", "actuent_events", /calendar/i]
 ]
 const BAD = /rate limit|too many (people|requests)|catch (my|his) breath|temporarily (busy|unavailable)|dublin|i (can't|cannot|don't have the ability to) (browse|access the internet|search the web)|tool (error|failed)/i
 
