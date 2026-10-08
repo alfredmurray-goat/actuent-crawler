@@ -1,0 +1,24 @@
+name: Opening Hours Check
+# Weekly: 200 places' stored opening hours against what their own sites say now (hours_check.ts).
+on:
+  schedule:
+    - cron: '0 4 * * 3'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Only report (1) or also fix (empty)'
+        default: ''
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm install
+      - run: npx tsx hours_check.ts
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          DRY_RUN: ${{ github.event.inputs.dry_run }}
