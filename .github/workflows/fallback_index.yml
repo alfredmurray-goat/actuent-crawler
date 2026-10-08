@@ -1,0 +1,27 @@
+name: Fallback Index
+# Daily: data/fallback.json, the small copy of the index search falls back to when the database is down (fallback_index.ts).
+on:
+  schedule:
+    - cron: '30 5 * * *'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm install
+      - run: npx tsx fallback_index.ts
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+      - name: Commit if changed
+        run: |
+          git config user.name "actuent-bot"
+          git config user.email "bot@actuent.ai"
+          git add data/fallback.json
+          git diff --cached --quiet || (git commit -m "Fallback index refresh" && git pull --rebase -q && git push)
