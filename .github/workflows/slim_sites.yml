@@ -1,8 +1,8 @@
 name: Slim Site Rows
 # Nightly: duplicate intents, duplicate actions and empty or repeated pages out of site rows (slim_sites.ts).
+# By hand only: measured 2026-10-08 at ~8–10 MB to gain over the whole table, so not worth rewriting
+# rows nightly; the space is dead rows that only `vacuum full lawp_sites` frees.
 on:
-  schedule:
-    - cron: '15 1 * * *'
   workflow_dispatch:
     inputs:
       dry_run:
