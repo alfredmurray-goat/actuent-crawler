@@ -1,0 +1,28 @@
+name: Slim Site Rows
+# Nightly: duplicate intents, duplicate actions and empty or repeated pages out of site rows (slim_sites.ts).
+on:
+  schedule:
+    - cron: '15 1 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Only measure (1) or change (empty)'
+        default: '1'
+      slice:
+        description: 'Domains starting with (0 = digits); empty = tonight''s'
+        default: ''
+jobs:
+  slim:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm install
+      - run: npx tsx slim_sites.ts
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          DRY_RUN: ${{ github.event.inputs.dry_run }}
+          SLICE: ${{ github.event.inputs.slice }}
