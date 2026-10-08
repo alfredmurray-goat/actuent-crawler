@@ -24,4 +24,4 @@ jobs:
           git config user.name "actuent-bot"
           git config user.email "bot@actuent.ai"
           git add data/fallback.json
-          git diff --cached --quiet || (git commit -m "Fallback index refresh" && git pull --rebase -q && git push)
+          git diff --cached --quiet || (git commit -m "Fallback index refresh" && git pull --rebase --autostash -q && git push)

@@ -24,7 +24,12 @@ async function main() {
     if (rows.length < 1000) break
   }
   const now = new Date(), until = new Date(Date.now() + 4 * 86400000)
-  const events = await get(`lawp_events?select=name,url,domain,start_date,venue,city,country,price,currency&start_date=gte.${encodeURIComponent(new Date(Date.now() - 6 * 3600000).toISOString())}&start_date=lt.${encodeURIComponent(until.toISOString())}&city=not.is.null&order=start_date.asc&limit=6000`)
+  const events: any[] = []
+  for (let from = 0; from < 6000; from += 1000) {
+    const rows = await get(`lawp_events?select=name,url,domain,start_date,venue,city,country,price,currency&start_date=gte.${encodeURIComponent(new Date(Date.now() - 6 * 3600000).toISOString())}&start_date=lt.${encodeURIComponent(until.toISOString())}&city=not.is.null&order=start_date.asc&limit=1000&offset=${from}`)
+    events.push(...rows)
+    if (rows.length < 1000) break
+  }
   const data = {
     built_at: now.toISOString(),
     sites: sites.map(s => {
