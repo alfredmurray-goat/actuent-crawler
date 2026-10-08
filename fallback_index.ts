@@ -26,7 +26,7 @@ async function main() {
   const now = new Date(), until = new Date(Date.now() + 4 * 86400000)
   const events: any[] = []
   for (let from = 0; from < 6000; from += 1000) {
-    const rows = await get(`lawp_events?select=name,url,domain,start_date,venue,city,country,price,currency&start_date=gte.${encodeURIComponent(new Date(Date.now() - 6 * 3600000).toISOString())}&start_date=lt.${encodeURIComponent(until.toISOString())}&city=not.is.null&order=start_date.asc&limit=1000&offset=${from}`)
+    const rows = await get(`lawp_events?select=name,url,domain,start_date,venue,city,country,price,currency,description&start_date=gte.${encodeURIComponent(new Date(Date.now() - 6 * 3600000).toISOString())}&start_date=lt.${encodeURIComponent(until.toISOString())}&city=not.is.null&order=start_date.asc&limit=1000&offset=${from}`)
     events.push(...rows)
     if (rows.length < 1000) break
   }
@@ -36,7 +36,7 @@ async function main() {
       const home = s["/"] || s.pages || {}
       return [s.domain, clip(s.name, 60), s.category || "", s.city || "", clip(home.content || home.title || "", 160)]
     }),
-    events: events.map(e => [clip(e.name, 90), e.url, e.start_date, clip(e.venue, 60), e.city, e.country || "", e.price ?? null, e.currency || ""])
+    events: events.map(e => [clip(e.name, 90), e.url, e.start_date, clip(e.venue, 60), e.city, e.country || "", e.price ?? null, e.currency || "", clip(String(e.description || "").split(/[.!?]/)[0], 50)])
   }
   mkdirSync("data", { recursive: true })
   const json = JSON.stringify(data)
