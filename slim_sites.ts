@@ -32,7 +32,7 @@ export function slimSite(s: { domain: string, pages: any, actions: any }): { pag
 
 async function main() {
   const next = SLICES[SLICES.indexOf(slice) + 1]
-  let cursor = slice === "0" ? "" : slice, done = 0, changed = 0, saved = 0
+  let cursor = slice === "0" ? "" : slice, done = 0, changed = 0, saved = 0, defaultInput = 0, actionBytes = 0, intentBytes = 0, pageBytes = 0
   console.log(`Slice "${slice}"${DRY ? " (dry run)" : ""}`)
   const full = DRY ? null : await databaseFullness()
   if (full != null && full >= 0.85) { console.log(`Database ${Math.round(full * 100)}% full: run vacuum full first, nothing changed`); return }
@@ -44,6 +44,9 @@ async function main() {
     if (!rows.length) break
     for (const s of rows) {
       done++
+      // Measured for a possible next step (leaving the default input out needs every reader updated).
+      for (const a of Array.isArray(s.actions) ? s.actions : []) { if (JSON.stringify(a?.input) === '{"type":"text","required":false}') defaultInput += 41; intentBytes += JSON.stringify(a?.intent || []).length }
+      actionBytes += JSON.stringify(s.actions || []).length; pageBytes += JSON.stringify(s.pages || {}).length
       if (s.owner_key || s.native) continue
       const slim = slimSite(s)
       const diff = JSON.stringify(s.pages).length + JSON.stringify(s.actions).length - JSON.stringify(slim.pages).length - JSON.stringify(slim.actions).length
@@ -53,6 +56,7 @@ async function main() {
     }
     cursor = rows[rows.length - 1].domain
   }
+  console.log(`actions ${(actionBytes / 1048576).toFixed(1)} MB (default inputs ${(defaultInput / 1048576).toFixed(1)} MB, intents ${(intentBytes / 1048576).toFixed(1)} MB), pages ${(pageBytes / 1048576).toFixed(1)} MB`)
   console.log(`${done} sites read, ${changed} slimmer, ${(saved / 1048576).toFixed(2)} MB less${done ? ` (≈${Math.round(saved / done)} bytes a site)` : ""}${DRY ? " — dry run, nothing changed" : ""}`)
 }
 
