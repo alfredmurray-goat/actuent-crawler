@@ -1,0 +1,37 @@
+name: Load Test
+# By hand only: searches at a steady rate against the search API, signed as a load test (no rate
+# limit, logged as test), with where the time goes (bench/load.ts). Refuses to run in launch week
+# (13–21 Oct 2026) or when the database is over 85% full.
+on:
+  workflow_dispatch:
+    inputs:
+      rate:
+        description: 'Searches per minute'
+        default: '500'
+      seconds:
+        description: 'How long (seconds, max 300)'
+        default: '120'
+      api:
+        description: 'API to test (a preview deploy URL, or the live one)'
+        default: 'https://api.actuent.ai'
+jobs:
+  load:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm install
+      - name: Safety checks
+        run: |
+          npx tsx -e "import('./quiet.ts').then(async q => { const d = new Date(); if (d >= new Date('2026-10-13') && d < new Date('2026-10-22')) { console.log('Launch week: no load tests'); process.exit(1) } const f = await q.databaseFullness(); console.log('database', f); if (f != null && f >= 0.85) { console.log('Database over 85% full: no load test'); process.exit(1) } })"
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+      - run: npx tsx bench/load.ts
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          RATE: ${{ github.event.inputs.rate }}
+          DURATION_S: ${{ github.event.inputs.seconds }}
+          ACTUENT_API: ${{ github.event.inputs.api }}
