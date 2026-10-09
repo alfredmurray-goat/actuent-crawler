@@ -2,8 +2,8 @@ import { SUPABASE_URL, SUPABASE_HEADERS } from "./shared"
 import { fetchPublic } from "./safe-fetch"
 
 // Weekly: the 5,000 best-known sites (the ones search shows most) are opened like a visitor would,
-// homepage and indexed pages. A page that's gone (404 or 410) comes out of the site's pages, so
-// assistants never send anyone to it. A domain that's gone (no longer exists, or refuses every
+// homepage and indexed pages. Pages that answer 404 or 410 are listed in the log (not removed: page
+// keys are often summary names, not real addresses). A domain that's gone (no longer exists, or refuses every
 // connection) is checked again 10 minutes later, and only if it's still gone is the site hidden
 // (status "unreachable", like reconvert.ts does). Slow answers, server errors and blocks (401, 403,
 // 429, 5xx) never count: a busy site isn't a dead one. Claimed and native sites are never changed.
@@ -61,11 +61,10 @@ async function main() {
     for (const p of paths) if (await check(`https://${s.domain}${p}`) === "gone") gone.push(p)
     if (++checked % 500 === 0) console.log(`…${checked} checked`)
     if (!gone.length) return
-    const pages = { ...s.pages }
-    for (const p of gone) delete pages[p]
+    // Reported, not removed: page keys are often names from Actuent's own summary ("/about") rather
+    // than the site's real addresses, so a "not found" there doesn't mean the content is wrong.
     pagesRemoved += gone.length; sitesTrimmed++
-    console.log(`${s.domain}: ${gone.length} page${gone.length === 1 ? "" : "s"} gone (${gone.join(", ")})`)
-    await patch(s.domain, { pages })
+    console.log(`${s.domain}: ${gone.length} page${gone.length === 1 ? "" : "s"} answer "not found" (${gone.join(", ")})`)
   })
   console.log(`${down.length} homepages didn't answer; checking them again in 10 minutes`)
   if (down.length) await new Promise(r => setTimeout(r, 10 * 60000))
@@ -76,7 +75,7 @@ async function main() {
     console.log(`unreachable ${s.domain}`)
     await patch(s.domain, { status: "unreachable", checked_at: new Date().toISOString() })
   })
-  console.log(`Done${DRY ? " (dry run)" : ""}: ${pagesRemoved} dead pages removed from ${sitesTrimmed} sites, ${hidden} sites hidden as unreachable`)
+  console.log(`Done${DRY ? " (dry run)" : ""}: ${pagesRemoved} pages answered \"not found\" on ${sitesTrimmed} sites (listed above, not removed), ${hidden} sites hidden as unreachable`)
 }
 
 main().catch(e => { console.error(e); process.exit(1) })

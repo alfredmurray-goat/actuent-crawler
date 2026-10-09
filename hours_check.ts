@@ -3,7 +3,7 @@ import { fetchPublic } from "./safe-fetch"
 import { extractBusiness, OpeningHours } from "./business"
 
 // Weekly: are the opening hours Actuent gives for places still what the places themselves say?
-// 200 places with hours (from a different band of the best-known 100,000 each week) get their homepage read again;
+// Up to 200 places with hours (from a different 1,000 of the best-known 10,000 each week) get their homepage read again;
 // when the site's own hours (schema.org) differ from what's stored, the site's version is saved, and
 // special hours (holidays, "closed for renovation") come along. A report shows how often they differed,
 // so "open now" accuracy can be followed over time. Claimed sites are never changed (the owner decides).
@@ -18,13 +18,11 @@ const norm = (h: OpeningHours[] | undefined) => JSON.stringify((h || []).map(x =
 
 async function main() {
   // A different slice of the best-known places each week (cycling through the first 4,000).
-  // A range of popularity ranks at a time (the index on popularity_rank makes that fast), places with hours kept.
-  const sites: any[] = []
-  for (let lo = (week % 10) * 10000 + 1; sites.length < COUNT && lo < (week % 10) * 10000 + 10000; lo += 1000) {
-    const r = await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?select=domain,business,owner_key,status&popularity_rank=gte.${lo}&popularity_rank=lt.${lo + 1000}`, { headers: SUPABASE_HEADERS, signal: AbortSignal.timeout(30000) })
-    if (!r.ok) { console.error(`Couldn't load places: ${r.status} ${await r.text()}`); process.exit(1) }
-    sites.push(...(await r.json()).filter((s: any) => !s.status && s.business?.opening_hours?.length))
-  }
+  // A different 1,000 of the best-known sites each week (same query shape as dead_links.ts), places with hours kept.
+  const offset = (week % 10) * 1000
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?select=domain,business,owner_key&status=is.null&popularity_rank=not.is.null&order=popularity_rank.asc&limit=1000&offset=${offset}`, { headers: SUPABASE_HEADERS, signal: AbortSignal.timeout(60000) })
+  if (!r.ok) { console.error(`Couldn't load places: ${r.status} ${await r.text()}`); process.exit(1) }
+  const sites: any[] = (await r.json()).filter((s: any) => s.business?.opening_hours?.length)
   sites.splice(COUNT)
   let read = 0, same = 0, differ = 0, noHours = 0, failed = 0, updated = 0
   const examples: string[] = []
