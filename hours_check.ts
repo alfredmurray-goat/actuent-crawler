@@ -18,15 +18,17 @@ const norm = (h: OpeningHours[] | undefined) => JSON.stringify((h || []).map(x =
 
 async function main() {
   // A different slice of the best-known places each week (cycling through the first 4,000).
-  // Pages of 1,000 best-known sites (same query shape as dead_links.ts), starting further in each week,
+  // Pages of 1,000 best-known sites (by rank, from a different point each week),
   // keeping places with hours until there are COUNT of them (most best-known sites aren't places).
   const sites: any[] = []
-  for (let page = 0, start = (week % 8) * 10; page < 10 && sites.length < COUNT; page++) {
-    const r = await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?select=domain,business,owner_key&status=is.null&popularity_rank=not.is.null&order=popularity_rank.asc&limit=1000&offset=${(start + page) * 1000}`, { headers: SUPABASE_HEADERS, signal: AbortSignal.timeout(60000) })
+  let after = (week % 8) * 10000
+  for (let page = 0; page < 10 && sites.length < COUNT; page++) {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?select=domain,business,owner_key,popularity_rank&status=is.null&popularity_rank=gt.${after}&order=popularity_rank.asc&limit=1000`, { headers: SUPABASE_HEADERS, signal: AbortSignal.timeout(60000) })
     if (!r.ok) { console.error(`Couldn't load places: ${r.status} ${await r.text()}`); process.exit(1) }
     const rows: any[] = await r.json()
     sites.push(...rows.filter((s: any) => s.business?.opening_hours?.length))
     if (rows.length < 1000) break
+    after = rows[rows.length - 1].popularity_rank
   }
   sites.splice(COUNT)
   let read = 0, same = 0, differ = 0, noHours = 0, failed = 0, updated = 0
