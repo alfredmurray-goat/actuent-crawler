@@ -555,7 +555,64 @@ async function loppemarkeder(): Promise<Ev[]> {
   return out
 }
 
+// Melkweg, Amsterdam: the whole programme (concerts, club nights, film) is in the agenda page's data.
+async function melkweg(): Promise<Ev[]> {
+  const r = await get("https://www.melkweg.nl/en/agenda")
+  if (!r) return []
+  const m = (await r.text()).match(/<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/)
+  if (!m) return []
+  const out: Ev[] = []
+  const walk = (o: any) => {
+    if (Array.isArray(o)) { o.forEach(walk); return }
+    if (!o || typeof o !== "object") return
+    const a = o.attributes
+    if (o.type === "events" && a?.startDate && a?.name && a.isPublished !== false && !a.isCancelled && !a.isPrivateEvent) {
+      const kind = String(a.profile || "Event")
+      const tags = Array.isArray(a.tags) ? a.tags.slice(0, 3).join(", ") : ""
+      out.push({ url: `https://www.melkweg.nl${a.url}`, name: text(a.name), start_date: a.startTime || a.startDate, venue: "Melkweg", city: "Amsterdam", country: "NL",
+        description: [`${kind}${tags ? ` (${tags})` : ""}`, a.subtitle ? text(a.subtitle) : "", a.artists ? text(a.artists) : "", a.isSoldOut ? "Sold out" : ""].filter(Boolean).join(". ").slice(0, 300) })
+      return
+    }
+    Object.values(o).forEach(walk)
+  }
+  walk(JSON.parse(m[1]))
+  return out.filter((e, i) => out.findIndex(x => x.url === e.url) === i)
+}
+
+// Eventbrite's public city pages ("events in London"): a list of events in the page's schema.org data
+// (date, name, link, place), a few pages each. Online-only events are left out (they aren't "in" the city).
+async function eventbriteCity(base: string, city: string, country: string, pages = 5): Promise<Ev[]> {
+  const out: Ev[] = []
+  for (let i = 0; i < pages; i++) {
+    const r = await get(`${base}${i ? `?page=${i + 1}` : ""}`)
+    if (!r) break
+    const html = await r.text()
+    let found = 0
+    for (const m of html.matchAll(/<script type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/g)) {
+      let d: any = null
+      try { d = JSON.parse(m[1]) } catch { continue }
+      for (const li of Array.isArray(d?.itemListElement) ? d.itemListElement : []) {
+        const e = li?.item
+        if (!e?.url || !e?.startDate || !e?.name) continue
+        const where = e.location || {}, addr = where.address || {}
+        if (/online|virtual/i.test(`${where["@type"] || ""} ${where.name || ""}`) || (!addr.addressLocality && !where.name)) continue
+        found++
+        out.push({ url: String(e.url).split("?")[0], name: text(e.name), start_date: String(e.startDate), venue: text(where.name || ""), city: addr.addressLocality || city, country: addr.addressCountry || country,
+          description: [text(e.description || "").slice(0, 200), /^\d{4}-\d{2}-\d{2}$/.test(String(e.startDate)) ? "Time: see the listing" : ""].filter(Boolean).join(". ") || null })
+      }
+    }
+    if (!found) break
+    await pause(1500)
+  }
+  return out.filter((e, i) => out.findIndex(x => x.url === e.url && x.start_date === e.start_date) === i)
+}
+
 export const READERS: Record<string, () => Promise<Ev[]>> = {
+  "melkweg.nl": melkweg,
+  "eventbrite.co.uk": () => eventbriteCity("https://www.eventbrite.co.uk/d/united-kingdom--london/events/", "London", "GB"),
+  "eventbrite.de": () => eventbriteCity("https://www.eventbrite.de/d/germany--berlin/events/", "Berlin", "DE"),
+  "eventbrite.nl": () => eventbriteCity("https://www.eventbrite.nl/d/netherlands--amsterdam/events/", "Amsterdam", "NL"),
+  "londontheatre.co.uk": () => schemaEvents([{ url: "https://www.londontheatre.co.uk/whats-on", city: "London", country: "GB" }]),
   "loppemarkeder.nu": loppemarkeder,
   "bbg.org": bbg,
   "tribe-events": tribe,
@@ -586,7 +643,7 @@ export const READERS: Record<string, () => Promise<Ev[]>> = {
 }
 
 // Music venues: their events get a genre (genres.ts).
-const MUSIC = new Set(["vega.dk", "royalarena.dk", "drkoncerthuset.dk", "ab-b.dk", "pumpehuset.dk", "aegpresents.com", "mercuryeastpresents.com", "irvingplaza.com", "livenation.com", "thebellhouseny.com"])
+const MUSIC = new Set(["melkweg.nl", "vega.dk", "royalarena.dk", "drkoncerthuset.dk", "ab-b.dk", "pumpehuset.dk", "aegpresents.com", "mercuryeastpresents.com", "irvingplaza.com", "livenation.com", "thebellhouseny.com"])
 export async function readVenues(only?: string[]): Promise<number> {
   let total = 0
   for (const [domain, read] of Object.entries(READERS)) {
