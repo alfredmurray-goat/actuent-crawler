@@ -5,6 +5,13 @@ on:
   schedule:
     - cron: '30 2 * * *'
   workflow_dispatch:
+    inputs:
+      shop:
+        description: 'Only this shop (e.g. apple.com); empty = all'
+        default: ''
+      ignore_db_size:
+        description: '1 = add products even when the database is over 85% (small shops only)'
+        default: ''
 jobs:
   products:
     runs-on: ubuntu-latest
@@ -18,3 +25,5 @@ jobs:
       - run: npx tsx schema_shops.ts
         env:
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          SHOP: ${{ github.event.inputs.shop }}
+          IGNORE_DB_SIZE: ${{ github.event.inputs.ignore_db_size }}
