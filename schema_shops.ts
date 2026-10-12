@@ -17,11 +17,16 @@ const BRANDS = /\/(nike|hoka|brooks|asics|on|on-running|saucony|new-balance|adid
 
 // allBrands: a brand's own shop (apple.com), where every product counts, not only BRANDS.
 // extra: product pages the shop's sitemap leaves out (Apple's has no Watch or AirPods pages).
-type Shop = { domain: string, sitemapIndex: string, productPath: RegExp, currency: string, allBrands?: boolean, extra?: string[] }
+// prefer: product pages read first (what people search for); max: at most this many a run.
+type Shop = { domain: string, sitemapIndex: string, productPath: RegExp, currency: string, allBrands?: boolean, extra?: string[], prefer?: RegExp, max?: number }
 const SHOPS: Shop[] = [
   { domain: "zappos.com", sitemapIndex: "https://www.zappos.com/sitemap/product_index.xml", productPath: /^https:\/\/www\.zappos\.com\/p\/[^/]+\/product\/\d+/, currency: "USD" },
   { domain: "roadrunnersports.com", sitemapIndex: "https://www.roadrunnersports.com/sitemap_products.xml", productPath: /^https:\/\/www\.roadrunnersports\.com\/product\/\d+\//, currency: "USD" },
   { domain: "dsw.com", sitemapIndex: "https://www.dsw.com/sitemap/cs_index.xml", productPath: /^https:\/\/www\.dsw\.com\/product\//, currency: "USD" },
+  // Brand stores: every product is the brand's own (allBrands); the 2,000-new-a-day cap still applies.
+  { domain: "nike.com", sitemapIndex: "https://www.nike.com/sitemap-v2-pdp-en-us.xml", productPath: /^https:\/\/www\.nike\.com\/t\/[A-Za-z0-9-]+(\/[A-Za-z0-9-]+)?$/, currency: "USD", allBrands: true,
+    prefer: /pegasus|vomero|invincible|structure|air-max|air-force|dunk|jordan-1|blazer|cortez|running-shoe|shoes/i, max: 600 },
+  { domain: "bose.com", sitemapIndex: "https://www.bose.com/sitemap_0-product.xml", productPath: /^https:\/\/www\.bose\.com\/p\/(?!product-sets\/)[a-z0-9-]+\/[a-z0-9-]+\/[A-Za-z0-9-]+\.html$/, currency: "USD", allBrands: true },
   { domain: "apple.com", sitemapIndex: "https://www.apple.com/shop/sitemaps/buy.xml", productPath: /^https:\/\/www\.apple\.com\/shop\/buy-[a-z-]+\/[a-z0-9-]+$/, currency: "USD", allBrands: true,
     extra: ["watch/apple-watch", "watch/apple-watch-se", "watch/apple-watch-ultra", "airpods/airpods-pro-3", "airpods/airpods-4", "airpods/airpods-max"].map(p => `https://www.apple.com/shop/buy-${p}`) }
 ]
@@ -46,6 +51,11 @@ function firstProduct(html: string): any | null {
     const list = Array.isArray(d) ? d : d?.["@graph"] ? d["@graph"] : [d]
     const p = list.find((x: any) => [].concat(x?.["@type"] || []).includes("Product" as never))
     if (p) return p
+    // A ProductGroup (Nike: one product, a variant per colour or size): the group's name and brand with
+    // its first variant that has a price.
+    const g = list.find((x: any) => [].concat(x?.["@type"] || []).includes("ProductGroup" as never))
+    const v = g && [].concat(g.hasVariant || []).find((x: any) => x?.offers)
+    if (g && v) return { ...v, name: g.name || v.name, brand: g.brand || v.brand, url: g.url || v.url, description: g.description || v.description }
   }
   return null
 }
@@ -92,7 +102,9 @@ async function main() {
       // Kids' products are skipped: adult searches leave them out anyway, and they'd only take space.
       if (xml) urls.push(...locs(xml).filter(wanted))
     }
-    const picked = [...new Set([...(shop.extra || []), ...[...new Set(urls)].sort(() => Math.random() - 0.5)])].slice(0, PER_SHOP)
+    const shuffled = [...new Set(urls)].sort(() => Math.random() - 0.5)
+    const ordered = shop.prefer ? [...shuffled.filter(u => shop.prefer!.test(u)), ...shuffled.filter(u => !shop.prefer!.test(u))] : shuffled
+    const picked = [...new Set([...(shop.extra || []), ...ordered])].slice(0, Math.min(PER_SHOP, shop.max || PER_SHOP))
     console.log(`${shop.domain}: ${urls.length} product pages for popular brands, reading ${picked.length}`)
     const batch: Item[] = []
     let saved = 0
