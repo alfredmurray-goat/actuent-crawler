@@ -74,7 +74,7 @@ async function main() {
   } catch (e) { console.log(`country shops: ${e}`) }
 
   // The long tail of shops adds the most rows: it waits while the database is nearly full.
-  const growing = !await tooFullToGrow(0.85)
+  const growing = !await tooFullToGrow(0.8)
   if (growing) console.log(`Checking the top ${domains.length} sites for shops`)
   for (let i = 0; growing && i < domains.length && Date.now() - start < TIME_BUDGET_MS && !await searchNeedsTheDatabase(); i += CHUNK) {
     const todo = await due(domains.slice(i, i + CHUNK))

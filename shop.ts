@@ -165,6 +165,20 @@ export async function saveProducts(domain: string, items: Item[]): Promise<void>
       const before = await fetch(`${SUPABASE_URL}/rest/v1/lawp_items?select=url,price_eur&domain=eq.${encodeURIComponent(domain)}&limit=1000`, { headers: HEADERS })
         .then(r => r.ok ? r.json() : []).catch(() => [])
       const previous = new Map<string, number | null>((Array.isArray(before) ? before : []).map((r: any) => [r.url, r.price_eur == null ? null : Number(r.price_eur)]))
+      // At most NEW_PRODUCTS_PER_DAY (2,000) new products a day across all shop jobs (a shared counter),
+      // so the database doesn't fill up again; prices of products already listed are always updated.
+      const fresh = items.filter(i => !previous.has(i.url))
+      if (fresh.length && process.env.IGNORE_DB_SIZE !== "1") {
+        const cap = parseInt(process.env.NEW_PRODUCTS_PER_DAY || "2000")
+        const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/hit_counter_add`, { method: "POST", headers: HEADERS, body: JSON.stringify({ k: `products_new:${now.slice(0, 10)}`, window_seconds: 86400, n: fresh.length }) }).catch(() => null)
+        const total = r?.ok ? Number(await r.json()) : cap + 1
+        if (total > cap) {
+          const room = Math.max(0, fresh.length - (total - cap))
+          const keep = new Set(fresh.slice(0, room).map(i => i.url))
+          items = items.filter(i => previous.has(i.url) || keep.has(i.url))
+          if (!room) console.log(`${domain}: today's ${cap} new products are used up; only prices updated`)
+        }
+      }
       const changed = items.filter(i => previous.has(i.url) && i.price_eur != null && previous.get(i.url) != null && Math.abs(previous.get(i.url)! - i.price_eur) >= 0.01)
       const changedUrls = new Set(changed.map(i => i.url))
       const rest = items.filter(i => !changedUrls.has(i.url)).map(i => ({ ...i, updated_at: now }))

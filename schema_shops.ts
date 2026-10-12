@@ -71,7 +71,7 @@ async function itemFrom(shop: Shop, url: string): Promise<Item | null> {
 
 async function main() {
   const started = Date.now()
-  if (!process.env.DRY_RUN && await tooFullToGrow(0.85)) { console.log("Database nearly full: no new products this run."); return }
+  if (!process.env.DRY_RUN && await tooFullToGrow(0.8)) { console.log("Database nearly full: no new products this run."); return }
   const shops = SHOPS.filter(s => !process.env.SHOP || s.domain === process.env.SHOP)
   // Each shop gets its share of the time, so the first shop can't use up the whole run.
   const perShopMs = TIME_BUDGET_MS / shops.length
