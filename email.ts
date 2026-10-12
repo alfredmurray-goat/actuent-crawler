@@ -10,13 +10,13 @@ export function esc(v: unknown): string {
   return String(v ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!))
 }
 
-export async function sendEmail(to: string, subject: string, html: string, headers?: Record<string, string>): Promise<boolean> {
+export async function sendEmail(to: string, subject: string, html: string, headers?: Record<string, string>, replyTo = "support@localilabs.com"): Promise<boolean> {
   if (!RESEND_API_KEY || !to) return false
   try {
     const r = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: { "Authorization": `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ from: EMAIL_FROM, to: [to], subject, html, reply_to: "support@localilabs.com", ...(headers ? { headers } : {}) })
+      body: JSON.stringify({ from: EMAIL_FROM, to: [to], subject, html, reply_to: replyTo, ...(headers ? { headers } : {}) })
     })
     if (!r.ok) console.log(`email failed: ${r.status} ${await r.text()}`)
     return r.ok

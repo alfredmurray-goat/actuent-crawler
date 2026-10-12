@@ -1,0 +1,30 @@
+name: Week-One Email
+# Daily: one email to people who joined Pro or the weekly email exactly 7 days ago (week_one.ts).
+on:
+  schedule:
+    - cron: '0 9 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Only count (1) or send (empty)'
+        default: '1'
+      preview_to:
+        description: 'Send one of each to this address instead (e.g. hello@localilabs.com)'
+        default: ''
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm install
+      - run: npx tsx week_one.ts
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          DRY_RUN: ${{ github.event.inputs.dry_run }}
+          PREVIEW_TO: ${{ github.event.inputs.preview_to }}
