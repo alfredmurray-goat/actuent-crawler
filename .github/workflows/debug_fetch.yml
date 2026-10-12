@@ -1,0 +1,18 @@
+name: Debug Fetch
+# By hand: what a GitHub runner gets back from one URL (status and size only), for sites that block servers.
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: 'URL'
+        default: 'https://www.eventbrite.co.uk/d/united-kingdom--london/events/'
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - run: |
+          for ua in "Mozilla/5.0 (compatible; Actuent/1.0; +https://docs.actuent.ai/bot)" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)"; do
+            curl -sL -m 20 -A "$ua" -o page.html -w "%{http_code} %{size_download} bytes  [$ua]\n" "${{ github.event.inputs.url }}"
+            echo "ld+json blocks: $(grep -c 'application/ld+json' page.html)  itemListElement: $(grep -c itemListElement page.html)"
+          done
