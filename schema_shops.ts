@@ -25,7 +25,7 @@ const SHOPS: Shop[] = [
   { domain: "dsw.com", sitemapIndex: "https://www.dsw.com/sitemap/cs_index.xml", productPath: /^https:\/\/www\.dsw\.com\/product\//, currency: "USD" },
   // Brand stores: every product is the brand's own (allBrands); the 2,000-new-a-day cap still applies.
   { domain: "nike.com", sitemapIndex: "https://www.nike.com/sitemap-v2-pdp-en-us.xml", productPath: /^https:\/\/www\.nike\.com\/t\/[A-Za-z0-9-]+(\/[A-Za-z0-9-]+)?$/, currency: "USD", allBrands: true,
-    prefer: /pegasus|vomero|invincible|structure|air-max|air-force|dunk|jordan-1|blazer|cortez|running-shoe|shoes/i, max: 600 },
+    prefer: /pegasus|vomero|invincible|-structure-[0-9]|air-max|air-force|dunk|jordan-1|blazer|cortez|running-shoe|shoes/i, max: 600 },
   { domain: "bose.com", sitemapIndex: "https://www.bose.com/sitemap_0-product.xml", productPath: /^https:\/\/www\.bose\.com\/p\/(?!product-sets\/)[a-z0-9-]+\/[a-z0-9-]+\/[A-Za-z0-9-]+\.html$/, currency: "USD", allBrands: true },
   { domain: "apple.com", sitemapIndex: "https://www.apple.com/shop/sitemaps/buy.xml", productPath: /^https:\/\/www\.apple\.com\/shop\/buy-[a-z-]+\/[a-z0-9-]+$/, currency: "USD", allBrands: true,
     extra: ["watch/apple-watch", "watch/apple-watch-se", "watch/apple-watch-ultra", "airpods/airpods-pro-3", "airpods/airpods-4", "airpods/airpods-max"].map(p => `https://www.apple.com/shop/buy-${p}`) }
