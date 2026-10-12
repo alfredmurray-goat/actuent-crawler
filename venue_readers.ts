@@ -1,3 +1,4 @@
+import { createHmac } from "crypto"
 import { saveEvents, robotsAllows } from "./shared"
 import { USER_AGENT } from "./robots"
 import { extractEvents } from "./business"
@@ -581,12 +582,24 @@ async function melkweg(): Promise<Ev[]> {
 
 // Eventbrite's public city pages ("events in London"): a list of events in the page's schema.org data
 // (date, name, link, place), a few pages each. Online-only events are left out (they aren't "in" the city).
+// Eventbrite turns GitHub's servers away (HTTP 405) but answers Vercel's, so its pages are fetched
+// through Actuent's API (?relay=, signed with the service key, Eventbrite city pages only).
+async function eventbritePage(url: string): Promise<string | null> {
+  const key = process.env.SUPABASE_SERVICE_KEY
+  if (key) {
+    const minute = Math.floor(Date.now() / 60000)
+    const token = `${minute}.${createHmac("sha256", key).update(`relay:${minute}`).digest("hex").slice(0, 32)}`
+    const r = await fetch(`https://api.actuent.ai/api/search?relay=${encodeURIComponent(url)}`, { headers: { "x-actuent-relay": token }, signal: AbortSignal.timeout(30000) }).catch(() => null)
+    if (r?.ok) return r.text()
+  }
+  const direct = await get(url)
+  return direct ? direct.text() : null
+}
 async function eventbriteCity(base: string, city: string, country: string, pages = 5): Promise<Ev[]> {
   const out: Ev[] = []
   for (let i = 0; i < pages; i++) {
-    const r = await get(`${base}${i ? `?page=${i + 1}` : ""}`)
-    if (!r) break
-    const html = await r.text()
+    const html = await eventbritePage(`${base}${i ? `?page=${i + 1}` : ""}`)
+    if (!html) break
     let found = 0
     for (const m of html.matchAll(/<script type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/g)) {
       let d: any = null
