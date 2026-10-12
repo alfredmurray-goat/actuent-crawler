@@ -28,7 +28,8 @@ async function main() {
   let last = ""
   for (;;) {
     const r = await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?select=domain&business->>type=in.(${list})&status=is.null&domain=gt.${encodeURIComponent(last)}&order=domain.asc&limit=1000`, { headers: SUPABASE_HEADERS })
-    if (!r.ok) throw new Error(`${r.status} ${await r.text()}`)
+    // A slow database (statement timeout) stops only this part: the venue readers' events are already saved.
+    if (!r.ok) { console.log(`Couldn't list venues (${r.status}): skipping the venue crawl this time`); break }
     const rows: { domain: string }[] = await r.json()
     if (!rows.length) break
     domains.push(...rows.map(x => x.domain))
