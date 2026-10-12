@@ -31,7 +31,7 @@ const Q: [string, string | null, RegExp | null][] = [
   ["does spotify have a student discount", null, /student/i],
   ["compare notion vs obsidian", null, /obsidian/i],
   ["where is new balance from?", "none", /boston/i],
-  ["latest news about openai", "actuent_news", null],
+  ["latest news about openai", "actuent_search", null], // news is actuent_search with kind "news" since the tools were merged
   ["what is actuent?", "none", /internet|live|search/i],
   ["best password manager", null, /1password|bitwarden|dashlane|proton|keeper/i],
   ["plan a saturday afternoon in copenhagen: lunch, a museum and drinks", null, /lunch/i],
@@ -99,7 +99,11 @@ async function main() {
   const list = await mcp("tools/list")
   const tools = (list?.tools || []).map((t: any) => ({ type: "function", function: { name: t.name, description: String(t.description || "").slice(0, 350), parameters: t.inputSchema || { type: "object", properties: {} } } }))
   if (!tools.length) { console.error("Couldn't list Actuent's tools"); process.exit(1) }
-  const only = process.env.ONLY?.trim() ? process.env.ONLY.split(",").map(Number) : null
+  // ROTATE=4: a quarter of the questions per run (by the 3-hour block of the day), so each run stays
+  // inside the free model limits and all of them are asked several times a day.
+  const parts = Number(process.env.ROTATE) || 0, block = Math.floor(new Date().getUTCHours() / 3)
+  const only = process.env.ONLY?.trim() ? process.env.ONLY.split(",").map(Number)
+    : parts > 1 ? Q.map((_, i) => i + 1).filter(n => (n - 1) % parts === block % parts) : null
   const rows: string[] = []
   let passed = 0, total = 0
   for (const [i, [question, tool, must]] of Q.entries()) {

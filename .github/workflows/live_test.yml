@@ -1,10 +1,10 @@
 name: Live Assistant Test
-# Weekly (Monday morning) and in launch week every day: an AI assistant answers 20 launch questions
+# Weekly (Monday morning; all questions) and in launch week every 3 hours (a rotating quarter): an AI assistant answers launch questions
 # with Actuent's MCP tools (live_test.ts). Fails below 80%, so GitHub emails the failure.
 on:
   schedule:
     - cron: '0 6 * * 1'
-    - cron: '0 6 11-17 10 *'
+    - cron: '15 */3 13-20 10 *' # launch week: every 3 hours, a quarter of the questions each time
   workflow_dispatch:
     inputs:
       only:
@@ -27,3 +27,4 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_AI_TOKEN: ${{ secrets.CLOUDFLARE_AI_TOKEN }}
           ONLY: ${{ github.event.inputs.only }}
+          ROTATE: ${{ github.event_name == 'schedule' && github.event.schedule != '0 6 * * 1' && '4' || '' }}
