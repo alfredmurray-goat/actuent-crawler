@@ -16,12 +16,14 @@ const TIME_BUDGET_MS = parseInt(process.env.TIME_BUDGET_MIN || "90") * 60000
 const BRANDS = /\/(nike|hoka|brooks|asics|on|on-running|saucony|new-balance|adidas|ugg|birkenstock|crocs|converse|vans|dr-martens|the-north-face|patagonia|merrell|salomon|altra|timberland|teva|keen|allbirds|reebok|puma|mizuno|clarks|sorel|columbia)-/i
 
 // allBrands: a brand's own shop (apple.com), where every product counts, not only BRANDS.
-type Shop = { domain: string, sitemapIndex: string, productPath: RegExp, currency: string, allBrands?: boolean }
+// extra: product pages the shop's sitemap leaves out (Apple's has no Watch or AirPods pages).
+type Shop = { domain: string, sitemapIndex: string, productPath: RegExp, currency: string, allBrands?: boolean, extra?: string[] }
 const SHOPS: Shop[] = [
   { domain: "zappos.com", sitemapIndex: "https://www.zappos.com/sitemap/product_index.xml", productPath: /^https:\/\/www\.zappos\.com\/p\/[^/]+\/product\/\d+/, currency: "USD" },
   { domain: "roadrunnersports.com", sitemapIndex: "https://www.roadrunnersports.com/sitemap_products.xml", productPath: /^https:\/\/www\.roadrunnersports\.com\/product\/\d+\//, currency: "USD" },
   { domain: "dsw.com", sitemapIndex: "https://www.dsw.com/sitemap/cs_index.xml", productPath: /^https:\/\/www\.dsw\.com\/product\//, currency: "USD" },
-  { domain: "apple.com", sitemapIndex: "https://www.apple.com/shop/sitemaps/buy.xml", productPath: /^https:\/\/www\.apple\.com\/shop\/buy-[a-z-]+\/[a-z0-9-]+$/, currency: "USD", allBrands: true }
+  { domain: "apple.com", sitemapIndex: "https://www.apple.com/shop/sitemaps/buy.xml", productPath: /^https:\/\/www\.apple\.com\/shop\/buy-[a-z-]+\/[a-z0-9-]+$/, currency: "USD", allBrands: true,
+    extra: ["watch/apple-watch", "watch/apple-watch-se", "watch/apple-watch-ultra", "airpods/airpods-pro-3", "airpods/airpods-4", "airpods/airpods-max"].map(p => `https://www.apple.com/shop/buy-${p}`) }
 ]
 
 async function getText(url: string, timeoutMs = 20000): Promise<string | null> {
@@ -90,7 +92,7 @@ async function main() {
       // Kids' products are skipped: adult searches leave them out anyway, and they'd only take space.
       if (xml) urls.push(...locs(xml).filter(wanted))
     }
-    const picked = [...new Set(urls)].sort(() => Math.random() - 0.5).slice(0, PER_SHOP)
+    const picked = [...new Set([...(shop.extra || []), ...[...new Set(urls)].sort(() => Math.random() - 0.5)])].slice(0, PER_SHOP)
     console.log(`${shop.domain}: ${urls.length} product pages for popular brands, reading ${picked.length}`)
     const batch: Item[] = []
     let saved = 0
