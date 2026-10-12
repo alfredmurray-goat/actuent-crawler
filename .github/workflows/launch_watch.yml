@@ -1,9 +1,13 @@
 name: Launch Watch
-# Launch days (13–16 Oct), hourly: empty searches, busy answers and reported wrong answers (launch_watch.ts).
+# Launch days (13–16 Oct), hourly: empty searches, re-searches, busy answers and reported wrong answers (launch_watch.ts).
 on:
   schedule:
     - cron: '5 * 13-16 10 *'
   workflow_dispatch:
+    inputs:
+      hours:
+        description: 'How many hours back (1 = the last hour)'
+        default: '1'
 jobs:
   watch:
     runs-on: ubuntu-latest
@@ -19,3 +23,4 @@ jobs:
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          HOURS: ${{ github.event.inputs.hours }}
