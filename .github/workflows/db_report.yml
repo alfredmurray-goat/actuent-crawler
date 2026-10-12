@@ -1,0 +1,29 @@
+name: Database Report
+# Weekly (Monday): database size, which tables grew, days until full, emailed to hello@ (db_report.ts).
+on:
+  schedule:
+    - cron: '0 7 * * 1'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm install
+      - run: npx tsx db_report.ts
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+      - name: Keep this week's sizes
+        run: |
+          git config user.name "actuent-bot"
+          git config user.email "bot@actuent.ai"
+          git add data/db_sizes.json
+          git diff --cached --quiet || (git commit -m "Database sizes" && git pull --rebase --autostash -q && git push)
