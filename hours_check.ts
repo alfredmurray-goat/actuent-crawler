@@ -2,7 +2,7 @@ import { SUPABASE_URL, SUPABASE_HEADERS } from "./shared"
 import { fetchPublic } from "./safe-fetch"
 import { extractBusiness, OpeningHours } from "./business"
 
-// Weekly: are the opening hours Actuent gives for places still what the places themselves say?
+// Weekly (daily in launch week): are the opening hours Actuent gives for places still what the places themselves say?
 // Up to 200 places with hours (from a different part of the best-known 100,000 each week) get their homepage read again;
 // when the site's own hours (schema.org) differ from what's stored, the site's version is saved, and
 // special hours (holidays, "closed for renovation") come along. A report shows how often they differed,
@@ -29,6 +29,20 @@ async function main() {
     sites.push(...rows.filter((s: any) => s.business?.opening_hours?.length))
     if (rows.length < 1000) break
     after = rows[rows.length - 1].popularity_rank
+  }
+  // First: the places that actually came up in searches this week (most often first), so the hours
+  // people are seeing right now are the ones checked.
+  const since = encodeURIComponent(new Date(Date.now() - 7 * 86400000).toISOString())
+  const recent = await fetch(`${SUPABASE_URL}/rest/v1/searches?select=domains&created_at=gte.${since}&order=created_at.desc&limit=5000`, { headers: SUPABASE_HEADERS, signal: AbortSignal.timeout(60000) }).then(r => r.ok ? r.json() : []).catch(() => [])
+  const counts = new Map<string, number>()
+  for (const row of recent as any[]) for (const d of (row.domains || []).slice(0, 5)) counts.set(d, (counts.get(d) || 0) + 1)
+  const top = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 400).map(([d]) => d)
+  for (let i = 0; i < top.length; i += 100) {
+    const list = encodeURIComponent(top.slice(i, i + 100).map(d => `"${d}"`).join(","))
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/lawp_sites?select=domain,business,owner_key&status=is.null&domain=in.(${list})`, { headers: SUPABASE_HEADERS, signal: AbortSignal.timeout(60000) }).catch(() => null)
+    const rows: any[] = r?.ok ? await r.json() : []
+    const searched = rows.filter((s: any) => s.business?.opening_hours?.length && !sites.some(x => x.domain === s.domain))
+    sites.unshift(...searched)
   }
   sites.splice(COUNT)
   let read = 0, same = 0, differ = 0, noHours = 0, failed = 0, updated = 0

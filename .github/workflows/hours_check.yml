@@ -3,6 +3,7 @@ name: Opening Hours Check
 on:
   schedule:
     - cron: '0 4 * * 3'
+    - cron: '30 3 13-20 10 *' # daily in launch week
   workflow_dispatch:
     inputs:
       dry_run:
