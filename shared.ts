@@ -251,7 +251,9 @@ export async function saveEvents(domain: string, events: { url: string, start_da
     .map(e => ({ ...e, description: shortDescription(e.description) }))
   await fetch(`${SUPABASE_URL}/rest/v1/lawp_events?on_conflict=url,start_date`, {
     method: "POST",
-    headers: { ...SUPABASE_HEADERS, "Content-Type": "application/json", "Prefer": "resolution=merge-duplicates" },
+    // Only new events are written: an event already saved (same link and start time) is left as it is.
+    // Rewriting all ~14,000 each run left a dead copy of every row until the next vacuum (+40 MB a run).
+    headers: { ...SUPABASE_HEADERS, "Content-Type": "application/json", "Prefer": "resolution=ignore-duplicates,return=minimal" },
     body: JSON.stringify(unique.map(e => ({ lat: null, lon: null, end_date: null, description: null, venue: null, city: null, country: null, price: null, currency: null, ...e, domain, updated_at: now })))
   }).catch(() => {})
 }
