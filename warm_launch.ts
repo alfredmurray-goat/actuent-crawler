@@ -34,6 +34,20 @@ async function main() {
     console.log(`${r?.status ?? "failed"} ${String(Date.now() - t).padStart(5)}ms ${q}`)
     await new Promise(res => setTimeout(res, 3500)) // under the free rate limit
   }
+  // Check: the questions people are told to try now answer fast (from the cache). Fails the run (and so
+  // turns the health light amber) when more than a quarter of them are still slow.
+  const slow: string[] = []
+  for (const q of CORE) {
+    const t = Date.now()
+    const r = await fetch(`https://api.actuent.ai/api/search?q=${encodeURIComponent(q)}`, { headers: { "User-Agent": "Actuent-Warm/1.0" }, signal: AbortSignal.timeout(30000) }).catch(() => null)
+    const ms = Date.now() - t, body: any = r?.ok ? await r.json().catch(() => null) : null
+    const empty = !body || (!(body.results?.length) && !(body.events?.length) && !(body.products?.length) && !body.places)
+    if (ms > 1500 || empty) slow.push(`${q} (${ms} ms${empty ? ", nothing found" : ""})`)
+    await new Promise(res => setTimeout(res, 3500))
+  }
+  console.log(`Check: ${CORE.length - slow.length} of ${CORE.length} launch questions answer fast with results`)
+  for (const q of slow) console.log(`  slow or empty: ${q}`)
+  if (slow.length > CORE.length / 4) process.exitCode = 1
 }
 
 main().catch(e => { console.error(e); process.exit(1) })
